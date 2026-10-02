@@ -67,7 +67,7 @@ Examples:
                 ┌─────────────────────────────────────────────────────────┐
                 │              3. KNOWLEDGE ACCESS LAYER                  │
                 │                                                         │
-                │              C++ SEARCH INFRASTRUCTURE                  │
+                │                  SEARCH INFRASTRUCTURE                  │
                 │                                                         │
                 │  Lexical Search      Vector Search      Graph Retrieval │
                 │  Ranking             Filtering          Query Execution │
