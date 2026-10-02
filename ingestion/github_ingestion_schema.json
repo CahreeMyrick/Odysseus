@@ -1,0 +1,99 @@
+{
+  "source": {
+    "provider": "github",
+    "source_type": "repository",
+    "source_id": "github:owner/repo",
+    "name": "owner/repo",
+    "url": "https://github.com/owner/repo"
+  },
+
+  "snapshot": {
+    "version": "commit-sha",
+    "branch": "main",
+    "retrieved_at": "2026-10-02T13:00:00Z"
+  },
+
+  "artifacts": [
+    {
+      "id": "artifact:src/index.cpp",
+      "type": "file",
+      "path": "src/index.cpp",
+      "language": "cpp",
+      "content_hash": "sha256:...",
+      "metadata": {
+        "size_bytes": 18342
+      }
+    }
+  ],
+
+  "chunks": [
+    {
+      "id": "chunk:index:add_document",
+      "artifact_id": "artifact:src/index.cpp",
+      "chunk_type": "function",
+      "text": "void InvertedIndex::add_document(...) { ... }",
+      "location": {
+        "start_line": 84,
+        "end_line": 121
+      }
+    }
+  ],
+
+  "entities": [
+    {
+      "id": "entity:InvertedIndex",
+      "type": "class",
+      "name": "InvertedIndex",
+      "artifact_id": "artifact:src/index.cpp",
+      "location": {
+        "start_line": 20,
+        "end_line": 145
+      },
+      "attributes": {
+        "language": "cpp"
+      }
+    }
+  ],
+
+  "relationships": [
+    {
+      "id": "rel:1",
+      "subject": "entity:InvertedIndex",
+      "predicate": "defines",
+      "object": "entity:InvertedIndex::add_document",
+      "confidence": 1.0
+    }
+  ],
+
+  "claims": [
+    {
+      "id": "claim:1",
+      "statement": "InvertedIndex is responsible for adding documents to the search index.",
+      "claim_type": "extracted",
+      "status": "supported",
+      "evidence": [
+        {
+          "chunk_id": "chunk:index:add_document"
+        }
+      ],
+      "confidence": 0.96
+    }
+  ],
+
+  "provenance": [
+    {
+      "target_id": "claim:1",
+      "source_id": "github:owner/repo",
+      "artifact_id": "artifact:src/index.cpp",
+      "version": "commit-sha",
+      "location": {
+        "start_line": 84,
+        "end_line": 121
+      },
+      "extractor": {
+        "name": "odysseus-github-ingestor",
+        "version": "0.1.0"
+      }
+    }
+  ]
+}
