@@ -71,12 +71,3 @@ std::string getGithubFile(const std::string& owner, const std::string& repo,
     return base64Decode(json::parse(body).at("content").get<std::string>());
 }
 
-int main() {
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-    try {
-        std::cout << getGithubFile("octocat", "Hello-World", "README");
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << '\n';
-    }
-    curl_global_cleanup();
-}
