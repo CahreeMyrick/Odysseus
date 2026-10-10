@@ -1,543 +1,221 @@
 #include "code_extractor.hpp"
+#include "tree_sitter_versions.hpp"
 
-#include <cctype>
-#include <set>
-#include <stack>
-#include <string>
+#include <tree_sitter/api.h>
+#include <cstring>
+#include <limits>
+#include <memory>
+#include <stdexcept>
 #include <string_view>
+#include <utility>
 #include <vector>
+
+extern "C" const TSLanguage* tree_sitter_c();
+extern "C" const TSLanguage* tree_sitter_cpp();
 
 namespace odysseus::ingestion {
 namespace {
-
-enum class TokenKind {
-    Identifier,
-    Keyword,
-    Punctuation,
-    Number,
-    String,
-    Char,
-    Eof
-};
-
-struct Token {
-    TokenKind kind = TokenKind::Eof;
-    std::string text;
-    std::size_t line = 1;
-    std::size_t col = 1;
-};
-
-const std::set<std::string> control_keywords = {
-    "if", "while", "for", "switch", "catch", "return", "sizeof", "alignof",
-    "decltype", "typeid", "static_cast", "dynamic_cast", "const_cast",
-    "reinterpret_cast", "new", "delete", "throw", "defined", "case", "default"
-};
-
-bool is_identifier_start(char c) {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+bool is(TSNode node, const char* type) {
+    return !ts_node_is_null(node) && std::strcmp(ts_node_type(node), type) == 0;
 }
-
-bool is_identifier_char(char c) {
-    return is_identifier_start(c) || (c >= '0' && c <= '9');
+TSNode field(TSNode node, const char* name) {
+    return ts_node_child_by_field_name(node, name, static_cast<uint32_t>(std::strlen(name)));
 }
-
-std::string trim(const std::string& s) {
-    std::size_t start = 0;
-    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
-    std::size_t end = s.size();
-    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) --end;
-    return s.substr(start, end - start);
+std::string trim(std::string value) {
+    const auto start = value.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) return {};
+    return value.substr(start, value.find_last_not_of(" \t\r\n") - start + 1);
 }
-
-// Tokenize and extract preprocessor includes
-std::vector<Token> tokenize(const std::string& src, std::vector<code::Include>& includes) {
-    std::vector<Token> tokens;
-    const std::size_t len = src.size();
-    std::size_t i = 0;
-    std::size_t line = 1;
-    std::size_t col = 1;
-
-    while (i < len) {
-        char c = src[i];
-
-        // Newline
-        if (c == '\n') {
-            ++line;
-            col = 1;
-            ++i;
-            continue;
-        }
-
-        // Whitespace
-        if (std::isspace(static_cast<unsigned char>(c))) {
-            ++col;
-            ++i;
-            continue;
-        }
-
-        // Single-line comment
-        if (c == '/' && i + 1 < len && src[i + 1] == '/') {
-            i += 2;
-            col += 2;
-            while (i < len && src[i] != '\n') {
-                ++i;
-                ++col;
-            }
-            continue;
-        }
-
-        // Multi-line comment
-        if (c == '/' && i + 1 < len && src[i + 1] == '*') {
-            i += 2;
-            col += 2;
-            while (i + 1 < len && !(src[i] == '*' && src[i + 1] == '/')) {
-                if (src[i] == '\n') {
-                    ++line;
-                    col = 1;
-                } else {
-                    ++col;
-                }
-                ++i;
-            }
-            if (i + 1 < len) {
-                i += 2;
-                col += 2;
-            }
-            continue;
-        }
-
-        // Preprocessor directive
-        if (c == '#') {
-            const std::size_t pp_line = line;
-            ++i;
-            ++col;
-            // Read directive name
-            while (i < len && (src[i] == ' ' || src[i] == '\t')) {
-                ++i;
-                ++col;
-            }
-            std::string directive;
-            while (i < len && is_identifier_char(src[i])) {
-                directive += src[i];
-                ++i;
-                ++col;
-            }
-            if (directive == "include") {
-                while (i < len && (src[i] == ' ' || src[i] == '\t')) {
-                    ++i;
-                    ++col;
-                }
-                if (i < len && (src[i] == '<' || src[i] == '"')) {
-                    char term = src[i] == '<' ? '>' : '"';
-                    ++i;
-                    ++col;
-                    std::string target;
-                    while (i < len && src[i] != term && src[i] != '\n') {
-                        target += src[i];
-                        ++i;
-                        ++col;
-                    }
-                    if (i < len && src[i] == term) {
-                        ++i;
-                        ++col;
-                    }
-                    includes.push_back({target, pp_line});
-                }
-            }
-            // Skip the rest of the preprocessor line (including backslash continuations)
-            while (i < len && src[i] != '\n') {
-                if (src[i] == '\\' && i + 1 < len && src[i + 1] == '\n') {
-                    ++line;
-                    col = 1;
-                    i += 2;
-                    continue;
-                }
-                ++i;
-                ++col;
-            }
-            continue;
-        }
-
-        // Raw string literal R"delim(...)delim"
-        if (c == 'R' && i + 1 < len && src[i + 1] == '"') {
-            const std::size_t tok_line = line;
-            const std::size_t tok_col = col;
-            i += 2;
-            col += 2;
-            std::string delim;
-            while (i < len && src[i] != '(' && src[i] != '\n') {
-                delim += src[i];
-                ++i;
-                ++col;
-            }
-            if (i < len && src[i] == '(') {
-                ++i;
-                ++col;
-            }
-            const std::string end_seq = ")" + delim + "\"";
-            std::size_t match_pos = src.find(end_seq, i);
-            if (match_pos != std::string::npos) {
-                while (i < match_pos + end_seq.size()) {
-                    if (src[i] == '\n') {
-                        ++line;
-                        col = 1;
-                    } else {
-                        ++col;
-                    }
-                    ++i;
-                }
-            } else {
-                i = len;
-            }
-            tokens.push_back({TokenKind::String, "", tok_line, tok_col});
-            continue;
-        }
-
-        // Standard string literal
-        if (c == '"') {
-            const std::size_t tok_line = line;
-            const std::size_t tok_col = col;
-            ++i;
-            ++col;
-            while (i < len && src[i] != '"') {
-                if (src[i] == '\\' && i + 1 < len) {
-                    if (src[i + 1] == '\n') {
-                        ++line;
-                        col = 1;
-                    } else {
-                        col += 2;
-                    }
-                    i += 2;
-                } else if (src[i] == '\n') {
-                    ++line;
-                    col = 1;
-                    ++i;
-                } else {
-                    ++col;
-                    ++i;
-                }
-            }
-            if (i < len && src[i] == '"') {
-                ++i;
-                ++col;
-            }
-            tokens.push_back({TokenKind::String, "", tok_line, tok_col});
-            continue;
-        }
-
-        // Character literal
-        if (c == '\'') {
-            const std::size_t tok_line = line;
-            const std::size_t tok_col = col;
-            ++i;
-            ++col;
-            while (i < len && src[i] != '\'') {
-                if (src[i] == '\\' && i + 1 < len) {
-                    col += 2;
-                    i += 2;
-                } else {
-                    ++col;
-                    ++i;
-                }
-            }
-            if (i < len && src[i] == '\'') {
-                ++i;
-                ++col;
-            }
-            tokens.push_back({TokenKind::Char, "", tok_line, tok_col});
-            continue;
-        }
-
-        // Identifier or keyword
-        if (is_identifier_start(c)) {
-            const std::size_t tok_line = line;
-            const std::size_t tok_col = col;
-            std::string id;
-            while (i < len && is_identifier_char(src[i])) {
-                id += src[i];
-                ++i;
-                ++col;
-            }
-            tokens.push_back({TokenKind::Identifier, id, tok_line, tok_col});
-            continue;
-        }
-
-        // Number literal
-        if (std::isdigit(static_cast<unsigned char>(c))) {
-            const std::size_t tok_line = line;
-            const std::size_t tok_col = col;
-            std::string num;
-            while (i < len && (is_identifier_char(src[i]) || src[i] == '.')) {
-                num += src[i];
-                ++i;
-                ++col;
-            }
-            tokens.push_back({TokenKind::Number, num, tok_line, tok_col});
-            continue;
-        }
-
-        // Two-character punctuation
-        if (i + 1 < len) {
-            std::string two = src.substr(i, 2);
-            if (two == "::" || two == "->" || two == "==" || two == "!=" ||
-                two == "<=" || two == ">=" || two == "&&" || two == "||" ||
-                two == "++" || two == "--" || two == "<<" || two == ">>") {
-                tokens.push_back({TokenKind::Punctuation, two, line, col});
-                i += 2;
-                col += 2;
-                continue;
-            }
-        }
-
-        // Single-character punctuation
-        tokens.push_back({TokenKind::Punctuation, std::string(1, c), line, col});
-        ++i;
-        ++col;
+code::SourceSpan span(TSNode node) {
+    const auto start = ts_node_start_point(node);
+    const auto end = ts_node_end_point(node);
+    const auto first = ts_node_start_byte(node), last = ts_node_end_byte(node);
+    // A node may include a trailing newline, whose end is column 0 of the next line.
+    const auto last_line = end.row + 1 - (last > first && end.column == 0 ? 1 : 0);
+    return {first, last, start.row + 1, last_line};
+}
+std::string occurrence(const char* kind, TSNode node) {
+    return std::string(kind) + ":" + std::to_string(ts_node_start_byte(node)) + ":" +
+           std::to_string(ts_node_end_byte(node));
+}
+std::string qualify(const std::string& scope, const std::string& name) {
+    if (name.rfind("::", 0) == 0) return name.substr(2);
+    if (scope.empty() || name.rfind(scope + "::", 0) == 0) return name;
+    return scope + "::" + name;
+}
+// Follow only declarator links, never parameter types or nested expressions.
+TSNode function_declarator(TSNode node) {
+    TSNode result{};
+    while (!ts_node_is_null(node)) {
+        if (is(node, "function_declarator")) result = node;
+        auto next = field(node, "declarator");
+        if (ts_node_is_null(next) && is(node, "parenthesized_declarator"))
+            next = ts_node_named_child(node, 0);
+        node = next;
     }
-
-    return tokens;
+    return result;
 }
+TSNode terminal_name(TSNode node) {
+    while (!ts_node_is_null(node)) {
+        TSNode next{};
+        if (is(node, "qualified_identifier") || is(node, "template_function") ||
+            is(node, "template_method")) next = field(node, "name");
+        else if (is(node, "field_expression")) next = field(node, "field");
+        if (ts_node_is_null(next)) break;
+        node = next;
+    }
+    return node;
+}
+struct Context {
+    std::string scope_id;
+    std::string qualified_scope;
+    std::string caller_id;
+    std::string caller;
+};
+struct Pending { TSNode node; Context context; };
 
+class Extractor {
+public:
+    explicit Extractor(const std::string& source) : source_(source) {}
+
+    code::FileModel run(TSNode root, CodeLanguage language) {
+        model_.schema_version = 2;
+        model_.parser = {"tree-sitter", ODYSSEUS_TS_VERSION,
+            language == CodeLanguage::C ? "c" : "cpp",
+            language == CodeLanguage::C ? ODYSSEUS_TS_C_VERSION : ODYSSEUS_TS_CPP_VERSION,
+            "odysseus-code-v2"};
+        model_.parse_status = ts_node_has_error(root) ? "partial" : "complete";
+        std::vector<Pending> pending{{root, {}}};
+        // Iterative traversal avoids a C++ stack overflow on deeply nested input.
+        while (!pending.empty()) {
+            auto current = std::move(pending.back());
+            pending.pop_back();
+            auto node = current.node;
+            auto context = current.context;
+            if (ts_node_is_error(node) || ts_node_is_missing(node)) {
+                model_.diagnostics.push_back({ts_node_is_missing(node) ? "missing" : "error",
+                    ts_node_is_missing(node) ? std::string("Missing syntax: ") + ts_node_type(node)
+                                             : "Unrecognized syntax", span(node)});
+            }
+
+            if (is(node, "preproc_include")) {
+                auto path = text(field(node, "path"));
+                if (path.size() >= 2 && ((path.front() == '<' && path.back() == '>') ||
+                    (path.front() == '"' && path.back() == '"'))) path = path.substr(1, path.size()-2);
+                code::Include include;
+                include.target = path;
+                include.span = span(node);
+                include.line = include.span.start_line;
+                model_.includes.push_back(std::move(include));
+            } else if (is(node, "namespace_definition")) {
+                auto name = text(field(node, "name"));
+                if (name.empty()) name = "<anonymous@" + std::to_string(ts_node_start_byte(node)) + ">";
+                context = add_scope(node, "namespace", name, context);
+            } else if ((is(node, "class_specifier") || is(node, "struct_specifier") ||
+                        is(node, "union_specifier")) && !ts_node_is_null(field(node, "body"))) {
+                const auto kind = is(node, "class_specifier") ? "class" :
+                                  is(node, "struct_specifier") ? "struct" : "union";
+                auto name = text(field(node, "name"));
+                if (name.empty()) name = "<anonymous@" + std::to_string(ts_node_start_byte(node)) + ">";
+                const auto owner = context.scope_id;
+                context = add_scope(node, kind, name, context);
+                code::ClassDefinition cls;
+                cls.name = name; cls.id = context.scope_id; cls.owner_id = owner;
+                cls.qualified_name = context.qualified_scope; cls.kind = kind;
+                cls.span = span(node); cls.start_line = cls.span.start_line; cls.end_line = cls.span.end_line;
+                model_.classes.push_back(std::move(cls));
+                context.caller.clear(); context.caller_id.clear();
+            } else if (is(node, "function_definition") && !ts_node_is_null(field(node, "body"))) {
+                const auto declarator = function_declarator(field(node, "declarator"));
+                const auto name_node = ts_node_is_null(declarator) ? TSNode{} : field(declarator, "declarator");
+                if (ts_node_is_null(name_node)) {
+                    model_.parse_status = "partial";
+                    model_.diagnostics.push_back({"unsupported", "Unsupported function declarator", span(node)});
+                    context.caller.clear(); context.caller_id.clear();
+                } else {
+                    const auto spelling = text(name_node);
+                    const auto name = text(terminal_name(name_node));
+                    code::FunctionDefinition fn;
+                    fn.id = occurrence("function", node); fn.owner_id = context.scope_id;
+                    fn.name = name; fn.qualified_name = qualify(context.qualified_scope, spelling);
+                    fn.span = span(node); fn.start_line = fn.span.start_line; fn.end_line = fn.span.end_line;
+                    fn.signature = trim(source_.substr(ts_node_start_byte(node),
+                        ts_node_start_byte(field(node, "body")) - ts_node_start_byte(node)));
+                    // This is the declared source spelling, not a resolved C++ type.
+                    fn.return_type = trim(source_.substr(ts_node_start_byte(node),
+                        ts_node_start_byte(name_node) - ts_node_start_byte(node)));
+                    model_.functions.push_back(fn);
+                    model_.scopes.push_back({fn.id, "function", fn.name, fn.qualified_name, fn.owner_id, fn.span});
+                    context = {fn.id, fn.qualified_name, fn.id, fn.qualified_name};
+                }
+            } else if (is(node, "lambda_expression")) {
+                code::FunctionDefinition fn;
+                fn.id = occurrence("lambda", node); fn.owner_id = context.scope_id; fn.kind = "lambda";
+                fn.name = "<lambda@" + std::to_string(ts_node_start_byte(node)) + ">";
+                fn.qualified_name = qualify(context.qualified_scope, fn.name);
+                fn.span = span(node); fn.start_line = fn.span.start_line; fn.end_line = fn.span.end_line;
+                fn.signature = trim(source_.substr(ts_node_start_byte(node),
+                    ts_node_start_byte(field(node, "body")) - ts_node_start_byte(node)));
+                model_.functions.push_back(fn);
+                model_.scopes.push_back({fn.id, "lambda", fn.name, fn.qualified_name, fn.owner_id, fn.span});
+                context = {fn.id, fn.qualified_name, fn.id, fn.qualified_name};
+            } else if (is(node, "compound_statement")) {
+                // Preserve block ownership for a future scope-aware resolver.
+                const auto id = occurrence("block", node);
+                model_.scopes.push_back({id, "block", "", context.qualified_scope, context.scope_id, span(node)});
+                context.scope_id = id;
+            } else if (is(node, "call_expression")) {
+                const auto target = field(node, "function");
+                code::FunctionCall call;
+                call.id = occurrence("call", node); call.caller = context.caller; call.caller_id = context.caller_id;
+                call.owner_id = context.scope_id;
+                call.callee = text(terminal_name(target));
+                call.expression = text(target);
+                call.span = span(node); call.line = call.span.start_line;
+                // An observed call expression is not evidence of a resolved target.
+                model_.calls.push_back(std::move(call));
+            }
+            // Include unnamed children to capture missing punctuation diagnostics.
+            for (uint32_t i = ts_node_child_count(node); i > 0; --i) {
+                const auto child = ts_node_child(node, i-1);
+                auto child_context = context;
+                // Lambda captures execute in the enclosing context, not the body.
+                if (is(node, "lambda_expression") && !ts_node_eq(child, field(node, "body")))
+                    child_context = current.context;
+                pending.push_back({child, std::move(child_context)});
+            }
+        }
+        return std::move(model_);
+    }
+private:
+    std::string text(TSNode node) const {
+        if (ts_node_is_null(node)) return {};
+        return source_.substr(ts_node_start_byte(node), ts_node_end_byte(node) - ts_node_start_byte(node));
+    }
+    Context add_scope(TSNode node, const char* kind, const std::string& name, Context context) {
+        const auto id = occurrence(kind, node);
+        const auto qualified = qualify(context.qualified_scope, name);
+        model_.scopes.push_back({id, kind, name, qualified, context.scope_id, span(node)});
+        context.scope_id = id; context.qualified_scope = qualified;
+        return context;
+    }
+    const std::string& source_;
+    code::FileModel model_;
+};
 } // namespace
 
-code::FileModel CodeExtractor::extract(const std::string& source_text) {
-    code::FileModel model;
-    std::vector<Token> tokens = tokenize(source_text, model.includes);
-    const std::size_t num_tokens = tokens.size();
-
-    std::vector<std::string> class_stack;
-    struct ClassScope {
-        std::string name;
-        std::size_t start_line;
-        int brace_depth;
-    };
-    std::vector<ClassScope> active_classes;
-
-    struct FunctionScope {
-        std::string name;
-        std::string qualified_name;
-        std::string signature;
-        std::string return_type;
-        std::size_t start_line;
-        int brace_depth;
-    };
-    std::vector<FunctionScope> active_functions;
-
-    int current_brace_depth = 0;
-
-    for (std::size_t i = 0; i < num_tokens; ++i) {
-        const auto& tok = tokens[i];
-
-        // Track braces
-        if (tok.kind == TokenKind::Punctuation && tok.text == "{") {
-            ++current_brace_depth;
-            continue;
-        }
-        if (tok.kind == TokenKind::Punctuation && tok.text == "}") {
-            --current_brace_depth;
-
-            // Check if active function finished
-            if (!active_functions.empty() &&
-                current_brace_depth == active_functions.back().brace_depth) {
-                const auto& fn = active_functions.back();
-                model.functions.push_back({
-                    fn.name, fn.qualified_name, fn.signature,
-                    fn.return_type, fn.start_line, tok.line
-                });
-                active_functions.pop_back();
-            }
-
-            // Check if active class finished
-            if (!active_classes.empty() &&
-                current_brace_depth == active_classes.back().brace_depth) {
-                const auto& cls = active_classes.back();
-                model.classes.push_back({cls.name, cls.start_line, tok.line});
-                if (!class_stack.empty()) class_stack.pop_back();
-                active_classes.pop_back();
-            }
-            continue;
-        }
-
-        // Detect Class or Struct Definition
-        if (tok.kind == TokenKind::Identifier && (tok.text == "class" || tok.text == "struct")) {
-            // Ensure not preceded by 'enum'
-            if (i > 0 && tokens[i - 1].kind == TokenKind::Identifier && tokens[i - 1].text == "enum") {
-                continue;
-            }
-            // Look ahead for class name and '{'
-            std::size_t look = i + 1;
-            std::string class_name;
-            bool is_definition = false;
-            while (look < num_tokens) {
-                const auto& t = tokens[look];
-                if (t.text == ";") {
-                    // Forward declaration
-                    break;
-                }
-                if (t.text == "{") {
-                    is_definition = true;
-                    break;
-                }
-                if (class_name.empty() && t.kind == TokenKind::Identifier) {
-                    // Skip keywords like alignas, final
-                    if (t.text != "final" && t.text != "alignas") {
-                        class_name = t.text;
-                    }
-                }
-                ++look;
-            }
-            if (is_definition && !class_name.empty()) {
-                class_stack.push_back(class_name);
-                active_classes.push_back({class_name, tok.line, current_brace_depth});
-                // Note: the '{' at `tokens[look]` will increment current_brace_depth when loop reaches it
-            }
-            continue;
-        }
-
-        // Detect Function Calls inside active function
-        if (!active_functions.empty() &&
-            tok.kind == TokenKind::Identifier &&
-            i + 1 < num_tokens && tokens[i + 1].text == "(") {
-            // Check if keyword
-            if (control_keywords.find(tok.text) == control_keywords.end()) {
-                model.calls.push_back({
-                    active_functions.back().qualified_name,
-                    tok.text,
-                    tok.line
-                });
-            }
-        }
-
-        // Detect Function Definition (only at file/namespace or class scope, not inside an active function)
-        if (active_functions.empty() && tok.kind == TokenKind::Punctuation && tok.text == "(" && i > 0) {
-            // The candidate function name is tokens[i - 1]
-            const auto& name_tok = tokens[i - 1];
-            if (name_tok.kind != TokenKind::Identifier ||
-                control_keywords.find(name_tok.text) != control_keywords.end()) {
-                continue;
-            }
-
-            // Find full qualified name (e.g., Class::method)
-            std::string func_name = name_tok.text;
-            std::string qualified_name = func_name;
-            std::size_t name_start_idx = i - 1;
-
-            if (name_start_idx >= 2 &&
-                tokens[name_start_idx - 1].text == "::" &&
-                tokens[name_start_idx - 2].kind == TokenKind::Identifier) {
-                qualified_name = tokens[name_start_idx - 2].text + "::" + func_name;
-                name_start_idx -= 2;
-            } else if (!class_stack.empty()) {
-                qualified_name = class_stack.back() + "::" + func_name;
-            }
-
-            // Extract return type (tokens before name back to previous statement delimiter)
-            std::string return_type;
-            bool invalid_return_type = false;
-            if (name_start_idx > 0) {
-                std::size_t r = name_start_idx;
-                while (r > 0) {
-                    const auto& prev = tokens[r - 1];
-                    if (prev.text == ";" || prev.text == "{" || prev.text == "}" ||
-                        prev.text == ":" || prev.text == "public" || prev.text == "private" ||
-                        prev.text == "protected") {
-                        break;
-                    }
-                    --r;
-                }
-                for (std::size_t rt_idx = r; rt_idx < name_start_idx; ++rt_idx) {
-                    if (control_keywords.find(tokens[rt_idx].text) != control_keywords.end()) {
-                        invalid_return_type = true;
-                        break;
-                    }
-                    if (!return_type.empty() && tokens[rt_idx].text != "::" &&
-                        tokens[rt_idx - 1].text != "::") {
-                        return_type += " ";
-                    }
-                    return_type += tokens[rt_idx].text;
-                }
-            }
-            if (invalid_return_type) continue;
-            return_type = trim(return_type);
-
-            // Find matching ')'
-            std::size_t look = i + 1;
-            int paren_depth = 1;
-            while (look < num_tokens && paren_depth > 0) {
-                if (tokens[look].text == "(") ++paren_depth;
-                else if (tokens[look].text == ")") --paren_depth;
-                ++look;
-            }
-            if (paren_depth != 0) continue;
-            std::size_t closing_paren_idx = look - 1;
-
-            // Check what follows the parameter list
-            std::string qualifiers;
-            bool is_func_def = false;
-            std::size_t scan = closing_paren_idx + 1;
-
-            while (scan < num_tokens) {
-                const auto& t = tokens[scan];
-                if (t.text == ";") {
-                    // Function declaration, not definition
-                    break;
-                }
-                if (t.text == "=") {
-                    // Pure virtual, default, or delete
-                    break;
-                }
-                if (t.text == "{") {
-                    is_func_def = true;
-                    break;
-                }
-                if (t.text == "const" || t.text == "noexcept" || t.text == "override" ||
-                    t.text == "final") {
-                    if (!qualifiers.empty()) qualifiers += " ";
-                    qualifiers += t.text;
-                } else if (t.text == ":" || t.text == "->") {
-                    // Constructor initializer list or trailing return type
-                    while (scan < num_tokens && tokens[scan].text != "{" && tokens[scan].text != ";") {
-                        ++scan;
-                    }
-                    if (scan < num_tokens && tokens[scan].text == "{") {
-                        is_func_def = true;
-                    }
-                    break;
-                } else {
-                    // Any unexpected operator or token means this is not a definition
-                    break;
-                }
-                ++scan;
-            }
-
-            if (is_func_def) {
-                // Construct signature
-                std::string sig;
-                if (!return_type.empty()) sig += return_type + " ";
-                sig += func_name + "(";
-                for (std::size_t p = i + 1; p < closing_paren_idx; ++p) {
-                    if (tokens[p].text != "," && tokens[p].text != "::" &&
-                        tokens[p - 1].text != "::" && tokens[p - 1].text != "(") {
-                        sig += " ";
-                    }
-                    sig += tokens[p].text;
-                }
-                sig += ")";
-                if (!qualifiers.empty()) sig += " " + qualifiers;
-
-                active_functions.push_back({
-                    func_name,
-                    qualified_name,
-                    sig,
-                    return_type,
-                    name_tok.line,
-                    current_brace_depth
-                });
-            }
-        }
-    }
-
-    return model;
+code::FileModel CodeExtractor::extract(const std::string& source_text, CodeLanguage language) {
+    if (source_text.size() > std::numeric_limits<uint32_t>::max())
+        throw std::length_error("Source exceeds Tree-sitter's byte-offset limit");
+    std::unique_ptr<TSParser, decltype(&ts_parser_delete)> parser(ts_parser_new(), ts_parser_delete);
+    if (!parser) throw std::runtime_error("Cannot allocate Tree-sitter parser");
+    const auto grammar = language == CodeLanguage::C ? tree_sitter_c() : tree_sitter_cpp();
+    if (!ts_parser_set_language(parser.get(), grammar))
+        throw std::runtime_error("Incompatible Tree-sitter grammar ABI");
+    std::unique_ptr<TSTree, decltype(&ts_tree_delete)> tree(
+        ts_parser_parse_string(parser.get(), nullptr, source_text.data(), static_cast<uint32_t>(source_text.size())),
+        ts_tree_delete);
+    if (!tree) throw std::runtime_error("Tree-sitter could not parse source");
+    return Extractor(source_text).run(ts_tree_root_node(tree.get()), language);
 }
-
 } // namespace odysseus::ingestion

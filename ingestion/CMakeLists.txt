@@ -1,10 +1,12 @@
-# Require CMake 3.16 or newer to configure this build.
-cmake_minimum_required(VERSION 3.16)
+# FetchContent SOURCE_SUBDIR requires CMake 3.18 or newer.
+cmake_minimum_required(VERSION 3.18)
 # Define the odysseus_ingestion project and enable C++ compilation.
-project(odysseus_ingestion LANGUAGES CXX)
+project(odysseus_ingestion LANGUAGES C CXX)
 
-# Locate the required nlohmann_json dependency, version 3.9.0 or newer.
-find_package(nlohmann_json 3.9.0 REQUIRED)
+include(cmake/TreeSitter.cmake)
+
+# Defaulted JSON decoding preserves compatibility with legacy model records.
+find_package(nlohmann_json 3.11.0 REQUIRED)
 # Locate the required PostgreSQL client library and headers.
 find_package(PostgreSQL REQUIRED)
 # Locate the required curl library and headers.
@@ -28,7 +30,7 @@ target_include_directories(ingestion PUBLIC include ${CMAKE_CURRENT_SOURCE_DIR}/
 # Add the generated header directory to the ingestion library's private include paths.
 target_include_directories(ingestion PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 # Link JSON publicly and PostgreSQL and curl privately to the ingestion library.
-target_link_libraries(ingestion PUBLIC nlohmann_json::nlohmann_json PRIVATE PostgreSQL::PostgreSQL CURL::libcurl)
+target_link_libraries(ingestion PUBLIC nlohmann_json::nlohmann_json PRIVATE PostgreSQL::PostgreSQL CURL::libcurl odysseus_tree_sitter odysseus_ts_c odysseus_ts_cpp)
 # Enable additional warnings when compiling with Clang or GNU C++.
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     # Apply standard, extra, and pedantic warnings to the ingestion library.
@@ -47,6 +49,14 @@ target_link_libraries(odysseus-index PRIVATE ingestion)
 include(CTest)
 # Create and register tests when BUILD_TESTING is enabled.
 if(BUILD_TESTING)
+    add_executable(graph_projection_tests tests/graph_projection_test.cpp)
+    target_include_directories(graph_projection_tests PRIVATE src)
+    target_link_libraries(graph_projection_tests PRIVATE ingestion)
+    add_test(NAME graph_projection_contract COMMAND graph_projection_tests)
+    add_executable(tree_sitter_tests tests/tree_sitter_test.cpp)
+    target_include_directories(tree_sitter_tests PRIVATE src)
+    target_link_libraries(tree_sitter_tests PRIVATE ingestion)
+    add_test(NAME tree_sitter_contract COMMAND tree_sitter_tests)
     # Build the code extractor test executable.
     add_executable(code_extractor_tests tests/code_extractor_test.cpp)
     # Link the code extractor tests to the ingestion library.

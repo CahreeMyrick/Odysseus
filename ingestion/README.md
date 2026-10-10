@@ -24,7 +24,11 @@ When a user references a datasource such a `github repo` or `document corpus`
 
 ### How to use it
 
-Build dependencies: C++17, CMake, nlohmann_json, PostgreSQL libpq, and libcurl.
+Build dependencies: C11/C++17 compilers, CMake 3.18+, nlohmann_json 3.11+,
+PostgreSQL libpq, and libcurl. The first CMake configure downloads SHA-256-pinned
+Tree-sitter 0.25.10, tree-sitter-c 0.24.1, and tree-sitter-cpp 0.23.4 sources.
+Their generated parsers are compiled locally; no Node, Rust, or Tree-sitter CLI
+installation is required. Later builds reuse the downloaded sources in `build/`.
 
 ```sh
 cmake -S ingestion -B build/ingestion
@@ -58,7 +62,71 @@ processing. Git LFS objects are not downloaded; pointer files remain ordinary
 contents. `.git` suffixes and trailing slashes are accepted.
 
 
-### Work to be done / Things to be added
+## Code extraction contract (v2)
+
+`CodeExtractor` uses Tree-sitter's C grammar for `.c`, and C++ for the other
+supported code extensions (including ambiguous `.h` headers). Direct callers can
+explicitly select `CodeLanguage::C` or `CodeLanguage::Cpp`.
+
+Code models retain the existing includes/classes/functions/calls arrays and add:
+
+- `schema_version: 2` and parser runtime, grammar, and extraction-rule versions.
+- `parse_status: complete|partial` with error, missing-syntax, or unsupported
+  extraction diagnostics. Partial results are retained, not rejected as binary.
+- Exact original UTF-8 source spans: zero-based bytes with exclusive end,
+  one-based inclusive lines. Definition spans cover the full definition, not
+  just its name. Multiline signature spelling is retained.
+- File-local occurrence IDs and lexical ownership for namespaces, classes,
+  functions, lambdas, blocks, and call sites. Consumers must qualify these IDs
+  by artifact and extraction version; they are not stable across source edits.
+- Unresolved call sites with full callee expression, display spelling, caller
+  occurrence ID, and source span. These are syntax observations, not proven
+  runtime calls. Global-initializer sites can have no caller function.
+
+Only definitions with bodies are listed as functions/classes. Prototypes,
+forward declarations, and deleted/defaulted methods are not definition records.
+Unsupported function declarators (such as conversion operators) produce an
+explicit partial-extraction diagnostic. `return_type` retains the declaration
+prefix spelling for compatibility, not a compiler-resolved type; the full
+`signature` is authoritative for complex declarators or trailing return types.
+`owner_id` is lexical ownership; an out-of-line method's class membership still
+requires semantic resolution.
+
+No preprocessor evaluation, macro expansion, type checking, overload resolution,
+or cross-file resolution is performed. Conditional branches can both appear in
+the extracted syntax. A complete parse means syntactic extraction succeeded,
+not that the program compiles or every referenced symbol is understood.
+
+PostgreSQL stores these fields in the existing model JSONB column and task
+payloads; no destructive SQL migration is needed. Legacy model JSON remains
+readable as version 1 with unknown parser provenance. Re-ingest an existing repo
+to produce v2 models: changed model payloads requeue indexing at a new generation.
+
+New graph projections use occurrence IDs so overloads and same-named classes do
+not collide. Calls become `OdysseusCallSite` nodes linked by `HAS_CALL_SITE` from
+their caller and `CONTAINS` from their file. They do not create guessed callee
+functions or `CALLS` edges. To visualize new call sites:
+
+```cypher
+MATCH p=(:OdysseusFunction)-[:HAS_CALL_SITE]->(:OdysseusCallSite)
+RETURN p LIMIT 100;
+```
+
+Legacy queued models retain the old projection behavior; old generations and
+their `CALLS` edges remain stored. This change does not migrate/delete historical
+graphs, add a resolver, or implement the target release-publication schema.
+Unfiltered graph exploration can therefore still show legacy inferred targets.
+
+Offline builds can supply matching unpacked upstream sources through CMake's
+`FETCHCONTENT_SOURCE_DIR_ODYSSEUS_TS_RUNTIME`,
+`FETCHCONTENT_SOURCE_DIR_ODYSSEUS_TS_C_SOURCE`, and
+`FETCHCONTENT_SOURCE_DIR_ODYSSEUS_TS_CPP_SOURCE` options. Overrides bypass archive
+hash verification: use exactly the documented versions for accurate provenance.
+
+Upstream sources and licenses:
+[runtime](https://github.com/tree-sitter/tree-sitter/tree/v0.25.10),
+[C grammar](https://github.com/tree-sitter/tree-sitter-c/tree/v0.24.1),
+[C++ grammar](https://github.com/tree-sitter/tree-sitter-cpp/tree/v0.23.4).
 
 
 
@@ -138,8 +206,9 @@ model is `nomic-embed-text`, using its `search_document: ` prefix; use the match
 chunking, not syntax-aware chunking.
 
 Graph tasks merge repository, revision, and file nodes connected by
-`HAS_REVISION` and `CONTAINS`. They do not yet extract code symbols, document
-entities, or semantic relationships. Constraints prevent duplicate nodes on retry.
+`HAS_REVISION` and `CONTAINS`, plus extracted class/function definitions and v2
+unresolved call sites as described above. Document entities and resolved semantic
+relationships remain future work. Constraints prevent duplicate nodes on retry.
 
 Configuration overrides:
 

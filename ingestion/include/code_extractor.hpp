@@ -5,9 +5,12 @@
 
 namespace odysseus::ingestion {
 
+enum class CodeLanguage { C, Cpp };
+
 class CodeExtractor {
 public:
-    static code::FileModel extract(const std::string& source_text);
+    static code::FileModel extract(const std::string& source_text,
+                                   CodeLanguage language = CodeLanguage::Cpp);
 };
 
 } // namespace odysseus::ingestion

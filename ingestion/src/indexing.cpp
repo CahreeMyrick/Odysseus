@@ -118,6 +118,7 @@ void IndexingWriter::graph(const IndexingTask& task) {
         cypher("CREATE CONSTRAINT odysseus_projection IF NOT EXISTS FOR (n:OdysseusFile) REQUIRE n.id IS UNIQUE", json::object());
         cypher("CREATE CONSTRAINT odysseus_class IF NOT EXISTS FOR (n:OdysseusClass) REQUIRE n.id IS UNIQUE", json::object());
         cypher("CREATE CONSTRAINT odysseus_function IF NOT EXISTS FOR (n:OdysseusFunction) REQUIRE n.id IS UNIQUE", json::object());
+        cypher("CREATE CONSTRAINT odysseus_call_site IF NOT EXISTS FOR (n:OdysseusCallSite) REQUIRE n.id IS UNIQUE", json::object());
         graph_ready_ = true;
     }
     const auto& p = task.payload;
@@ -139,6 +140,13 @@ void IndexingWriter::graph(const IndexingTask& task) {
 
     if (p.at("model_type") == "code" && p.contains("model")) {
         const auto& m = p.at("model");
+        const bool syntax_v2 = m.value("schema_version", 1) >= 2;
+        if (syntax_v2) {
+            cypher("MATCH (f:OdysseusFile {id:$fid}) SET f.parse_status=$status, f.parser=$parser, f.grammar=$grammar, f.grammar_version=$version",
+                   {{"fid", file_id}, {"status", m.at("parse_status")},
+                    {"parser", m.at("parser").at("name")}, {"grammar", m.at("parser").at("grammar")},
+                    {"version", m.at("parser").at("grammar_version")}});
+        }
         if (m.contains("classes") && m.at("classes").is_array()) {
             for (const auto& cls : m.at("classes")) {
                 const auto name = cls.at("name").get<std::string>();
@@ -148,7 +156,7 @@ void IndexingWriter::graph(const IndexingTask& task) {
                     WITH c
                     MATCH (f:OdysseusFile {id:$fid})
                     MERGE (f)-[:DEFINES]->(c)
-                )cypher", {{"cid", file_id + "::" + name}, {"name", name},
+                )cypher", {{"cid", file_id + "::" + (syntax_v2 ? cls.at("id").get<std::string>() : name)}, {"name", name},
                            {"start", cls.at("start_line")}, {"end", cls.at("end_line")},
                            {"fid", file_id}});
             }
@@ -164,7 +172,7 @@ void IndexingWriter::graph(const IndexingTask& task) {
                     WITH fn
                     MATCH (f:OdysseusFile {id:$fid})
                     MERGE (f)-[:DEFINES]->(fn)
-                )cypher", {{"fnid", file_id + "::" + qname}, {"name", name}, {"qname", qname},
+                )cypher", {{"fnid", file_id + "::" + (syntax_v2 ? fn.at("id").get<std::string>() : qname)}, {"name", name}, {"qname", qname},
                            {"sig", fn.at("signature")}, {"ret", fn.at("return_type")},
                            {"start", fn.at("start_line")}, {"end", fn.at("end_line")},
                            {"fid", file_id}});
@@ -172,6 +180,31 @@ void IndexingWriter::graph(const IndexingTask& task) {
         }
         if (m.contains("calls") && m.at("calls").is_array()) {
             for (const auto& call : m.at("calls")) {
+                if (syntax_v2) {
+                    // Syntax observes a call site, not a semantically resolved
+                    // callee. Preserve it without inventing Function/CALLS data.
+                    const auto site_id = file_id + "::" + call.at("id").get<std::string>();
+                    cypher(R"cypher(
+                        MATCH (f:OdysseusFile {id:$fid})
+                        MERGE (s:OdysseusCallSite {id:$sid})
+                        SET s.expression=$expression, s.callee_spelling=$callee,
+                            s.resolution_status=$status, s.line=$line,
+                            s.start_byte=$start, s.end_byte=$end, s.owner_id=$owner
+                        MERGE (f)-[:CONTAINS]->(s)
+                    )cypher", {{"fid", file_id}, {"sid", site_id},
+                        {"expression", call.at("expression")}, {"callee", call.at("callee")},
+                        {"status", call.at("resolution_status")}, {"line", call.at("line")},
+                        {"start", call.at("span").at("start_byte")},
+                        {"end", call.at("span").at("end_byte")}, {"owner", call.at("owner_id")}});
+                    const auto caller_id = call.at("caller_id").get<std::string>();
+                    if (!caller_id.empty()) {
+                        cypher(R"cypher(
+                            MATCH (caller:OdysseusFunction {id:$caller_id}), (s:OdysseusCallSite {id:$sid})
+                            MERGE (caller)-[:HAS_CALL_SITE]->(s)
+                        )cypher", {{"caller_id", file_id + "::" + caller_id}, {"sid", site_id}});
+                    }
+                    continue;
+                }
                 const auto caller = call.at("caller").get<std::string>();
                 const auto callee = call.at("callee").get<std::string>();
                 cypher(R"cypher(
