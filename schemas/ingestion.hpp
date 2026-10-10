@@ -1,23 +1,23 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include "common.hpp"
 
-using json = nlohmann::json;
+namespace odysseus::ingestion {
 
 enum class ArtifactType {
     File,
-    Document,
     Unknown
 };
 
 enum class Modality {
     Code,
     Document,
+    Tabular,
+    Image,
     Unknown
 };
 
@@ -27,19 +27,11 @@ enum class ContentEncoding {
     Unknown
 };
 
-struct SourceLocation {
-    std::string path;
-    std::size_t start_line = 0;
-    std::size_t end_line = 0;
-    std::size_t page = 0;
-};
-
-struct Provenance {
-    std::string source_id;
-    std::string snapshot_id;
-    std::string retrieved_at;
-
-    json metadata = json::object();
+enum class SourceType {
+    GitHub,
+    LocalFile,
+    Database,
+    Unknown
 };
 
 struct ArtifactContent {
@@ -60,21 +52,28 @@ struct ArtifactContent {
 
 struct Artifact {
     std::string id;
-    std::string source_id;
-    std::string snapshot_id;
 
     ArtifactType type = ArtifactType::Unknown;
     Modality modality = Modality::Unknown;
 
     std::string name;
+
     ArtifactContent content;
 
     std::string content_hash;
     std::size_t size_bytes = 0;
 
     SourceLocation location;
+    Provenance provenance;
 
     json metadata = json::object();
-
-    Provenance provenance;
 };
+
+struct SourceRequest {
+    SourceType type = SourceType::Unknown;
+    std::string uri;
+
+    json options = json::object();
+};
+
+}

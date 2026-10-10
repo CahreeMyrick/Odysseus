@@ -1,0 +1,22 @@
+name: odysseus-indexing
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.5
+    ports: ["127.0.0.1:16333:6333"]
+    volumes: ["qdrant-data:/qdrant/storage"]
+  neo4j:
+    image: neo4j:5.26-community
+    environment:
+      NEO4J_AUTH: none
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+    ports: ["127.0.0.1:17474:7474"]
+    volumes: ["neo4j-data:/data"]
+  ollama:
+    image: ollama/ollama:latest
+    ports: ["127.0.0.1:11435:11434"]
+    volumes: ["ollama-models:/root/.ollama"]
+volumes:
+  qdrant-data:
+  neo4j-data:
+  ollama-models:

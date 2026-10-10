@@ -1,0 +1,46 @@
+# CMake build directories and generated files
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+DartConfiguration.tcl
+Testing/
+compile_commands.json
+CMakeUserPresets.json
+/ingestion/generated/
+
+# Compiled objects, libraries, and debug symbols
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.pdb
+*.dSYM/
+
+# Local environment settings (keep sample configurations)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Editor caches and temporary files
+.cache/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS metadata
+.DS_Store
+._*
+
+# Local documentation (keep the development plan)
+/docs/*
+!/docs/dev_plan.md

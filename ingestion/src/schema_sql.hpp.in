@@ -1,0 +1,4 @@
+#pragma once
+namespace odysseus::ingestion {
+inline constexpr const char* initial_schema_sql = R"schema(@INITIAL_SCHEMA_SQL@)schema";
+}
