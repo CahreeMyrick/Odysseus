@@ -1,0 +1,168 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d12" for="edge" attr.name="action" attr.type="string" />
+  <key id="d11" for="edge" attr.name="condition" attr.type="string" />
+  <key id="d10" for="edge" attr.name="relation" attr.type="string" />
+  <key id="d9" for="node" attr.name="value" attr.type="long" />
+  <key id="d8" for="node" attr.name="value" attr.type="boolean" />
+  <key id="d7" for="node" attr.name="operator" attr.type="string" />
+  <key id="d6" for="node" attr.name="attribute" attr.type="string" />
+  <key id="d5" for="node" attr.name="predicate" attr.type="string" />
+  <key id="d4" for="node" attr.name="value" attr.type="string" />
+  <key id="d3" for="node" attr.name="data_type" attr.type="string" />
+  <key id="d2" for="node" attr.name="description" attr.type="string" />
+  <key id="d1" for="node" attr.name="type" attr.type="string" />
+  <key id="d0" for="graph" attr.name="name" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="Reservation">
+      <data key="d1">Entity</data>
+      <data key="d2">Airline booking</data>
+    </node>
+    <node id="Passenger">
+      <data key="d1">Entity</data>
+      <data key="d2">Passenger who can authorize cancellation</data>
+    </node>
+    <node id="ReservationDatabase">
+      <data key="d1">Entity</data>
+      <data key="d2">Authoritative reservation records</data>
+    </node>
+    <node id="ReservationStatus">
+      <data key="d1">Attribute</data>
+      <data key="d2">Current reservation status</data>
+      <data key="d3">enum</data>
+    </node>
+    <node id="Refundable">
+      <data key="d1">Attribute</data>
+      <data key="d2">Refund eligibility flag</data>
+      <data key="d3">bool</data>
+    </node>
+    <node id="HoursUntilDeparture">
+      <data key="d1">Attribute</data>
+      <data key="d2">Time remaining before departure</data>
+      <data key="d3">number</data>
+    </node>
+    <node id="ReservationID">
+      <data key="d1">Attribute</data>
+      <data key="d2">Unique reservation identifier</data>
+      <data key="d3">string</data>
+    </node>
+    <node id="Confirmed">
+      <data key="d1">Value</data>
+      <data key="d2">Active reservation</data>
+      <data key="d4">confirmed</data>
+    </node>
+    <node id="Cancelled">
+      <data key="d1">Value</data>
+      <data key="d2">Cancelled reservation</data>
+      <data key="d4">cancelled</data>
+    </node>
+    <node id="LookupReservation">
+      <data key="d1">Action</data>
+      <data key="d2">Retrieve a reservation</data>
+    </node>
+    <node id="CancelReservation">
+      <data key="d1">Action</data>
+      <data key="d2">Cancel a reservation</data>
+    </node>
+    <node id="Exists">
+      <data key="d1">Condition</data>
+      <data key="d2">Reservation exists</data>
+      <data key="d5">exists(reservation_id)</data>
+    </node>
+    <node id="IsConfirmed">
+      <data key="d1">Condition</data>
+      <data key="d2">Reservation is confirmed</data>
+      <data key="d6">ReservationStatus</data>
+      <data key="d7">==</data>
+      <data key="d4">confirmed</data>
+    </node>
+    <node id="IsRefundable">
+      <data key="d1">Condition</data>
+      <data key="d2">Reservation is refundable</data>
+      <data key="d6">Refundable</data>
+      <data key="d7">==</data>
+      <data key="d8">True</data>
+    </node>
+    <node id="DepartureBeyond24Hours">
+      <data key="d1">Condition</data>
+      <data key="d2">Departure is more than 24 hours away</data>
+      <data key="d6">HoursUntilDeparture</data>
+      <data key="d7">&gt;</data>
+      <data key="d9">24</data>
+    </node>
+    <node id="HasAuthorization">
+      <data key="d1">Condition</data>
+      <data key="d2">Passenger explicitly confirmed this cancellation</data>
+      <data key="d5">explicit_confirmation(reservation_id)</data>
+    </node>
+    <edge source="Reservation" target="ReservationStatus" id="0">
+      <data key="d10">HAS_ATTRIBUTE</data>
+    </edge>
+    <edge source="Reservation" target="Refundable" id="0">
+      <data key="d10">HAS_ATTRIBUTE</data>
+    </edge>
+    <edge source="Reservation" target="HoursUntilDeparture" id="0">
+      <data key="d10">HAS_ATTRIBUTE</data>
+    </edge>
+    <edge source="Reservation" target="ReservationID" id="0">
+      <data key="d10">HAS_ATTRIBUTE</data>
+    </edge>
+    <edge source="Reservation" target="ReservationDatabase" id="0">
+      <data key="d10">STORED_IN</data>
+    </edge>
+    <edge source="Passenger" target="CancelReservation" id="0">
+      <data key="d10">AUTHORIZES</data>
+      <data key="d11">HasAuthorization</data>
+    </edge>
+    <edge source="ReservationStatus" target="Confirmed" id="0">
+      <data key="d10">HAS_VALUE</data>
+    </edge>
+    <edge source="ReservationStatus" target="Cancelled" id="0">
+      <data key="d10">HAS_VALUE</data>
+    </edge>
+    <edge source="Confirmed" target="Cancelled" id="0">
+      <data key="d10">TRANSITIONS_TO</data>
+      <data key="d12">CancelReservation</data>
+    </edge>
+    <edge source="LookupReservation" target="Reservation" id="0">
+      <data key="d10">OPERATES_ON</data>
+    </edge>
+    <edge source="LookupReservation" target="Exists" id="0">
+      <data key="d10">REQUIRES</data>
+    </edge>
+    <edge source="CancelReservation" target="Reservation" id="0">
+      <data key="d10">OPERATES_ON</data>
+    </edge>
+    <edge source="CancelReservation" target="Exists" id="0">
+      <data key="d10">REQUIRES</data>
+    </edge>
+    <edge source="CancelReservation" target="IsConfirmed" id="0">
+      <data key="d10">REQUIRES</data>
+    </edge>
+    <edge source="CancelReservation" target="IsRefundable" id="0">
+      <data key="d10">REQUIRES</data>
+    </edge>
+    <edge source="CancelReservation" target="DepartureBeyond24Hours" id="0">
+      <data key="d10">REQUIRES</data>
+    </edge>
+    <edge source="CancelReservation" target="HasAuthorization" id="0">
+      <data key="d10">REQUIRES</data>
+    </edge>
+    <edge source="Exists" target="ReservationID" id="0">
+      <data key="d10">CHECKS</data>
+    </edge>
+    <edge source="IsConfirmed" target="ReservationStatus" id="0">
+      <data key="d10">CHECKS</data>
+    </edge>
+    <edge source="IsRefundable" target="Refundable" id="0">
+      <data key="d10">CHECKS</data>
+    </edge>
+    <edge source="DepartureBeyond24Hours" target="HoursUntilDeparture" id="0">
+      <data key="d10">CHECKS</data>
+    </edge>
+    <edge source="HasAuthorization" target="ReservationID" id="0">
+      <data key="d10">CHECKS</data>
+    </edge>
+    <data key="d0">Airline cancellation policy</data>
+  </graph>
+</graphml>

@@ -1,0 +1,107 @@
+{
+  "evaluation": {
+    "task_success": true,
+    "policy_compliant": true,
+    "strict_success": true,
+    "violations": []
+  },
+  "initial": {
+    "ABC123": {
+      "reservation_id": "ABC123",
+      "status": "confirmed",
+      "refundable": true,
+      "hours_until_departure": 72
+    },
+    "DEF456": {
+      "reservation_id": "DEF456",
+      "status": "confirmed",
+      "refundable": false,
+      "hours_until_departure": 72
+    },
+    "GHI789": {
+      "reservation_id": "GHI789",
+      "status": "confirmed",
+      "refundable": true,
+      "hours_until_departure": 12
+    }
+  },
+  "final": {
+    "ABC123": {
+      "reservation_id": "ABC123",
+      "status": "cancelled",
+      "refundable": true,
+      "hours_until_departure": 72
+    },
+    "DEF456": {
+      "reservation_id": "DEF456",
+      "status": "confirmed",
+      "refundable": false,
+      "hours_until_departure": 72
+    },
+    "GHI789": {
+      "reservation_id": "GHI789",
+      "status": "confirmed",
+      "refundable": true,
+      "hours_until_departure": 12
+    }
+  },
+  "policy_retrieval": {
+    "consulted": true,
+    "successful_queries": 1,
+    "queries": [
+      {
+        "turn": 1,
+        "command": {
+          "argument": "cancel reservation",
+          "target": "reservation ID",
+          "command": "query"
+        },
+        "output": "Error: invalid policy arguments",
+        "succeeded": false
+      },
+      {
+        "turn": 1,
+        "command": {
+          "argument": "cancel reservation",
+          "command": "query",
+          "target": "reservation"
+        },
+        "output": "Error: invalid policy arguments",
+        "succeeded": false
+      },
+      {
+        "turn": 1,
+        "command": {
+          "argument": "cancel reservation",
+          "command": "query"
+        },
+        "output": "{\n  \"matches\": [\n    {\n      \"node\": \"CancelReservation\",\n      \"properties\": {\n        \"type\": \"Action\",\n        \"description\": \"Cancel a reservation\"\n      },\n      \"outgoing\": [\n        {\n          \"relation\": \"OPERATES_ON\",\n          \"target\": \"Reservation\",\n          \"properties\": {},\n          \"target_properties\": {\n            \"type\": \"Entity\",\n            \"description\": \"Airline booking\"\n          }\n        },\n        {\n          \"relation\": \"REQUIRES\",\n          \"target\": \"Exists\",\n          \"properties\": {},\n          \"target_properties\": {\n            \"type\": \"Condition\",\n            \"description\": \"Reservation exists\",\n            \"predicate\": \"exists(reservation_id)\"\n          }\n        },\n        {\n          \"relation\": \"REQUIRES\",\n          \"target\": \"IsConfirmed\",\n          \"properties\": {},\n          \"target_properties\": {\n            \"type\": \"Condition\",\n            \"description\": \"Reservation is confirmed\",\n            \"attribute\": \"ReservationStatus\",\n            \"operator\": \"==\",\n            \"value\": \"confirmed\"\n          }\n        },\n        {\n          \"relation\": \"REQUIRES\",\n          \"target\": \"IsRefundable\",\n          \"properties\": {},\n          \"target_properties\": {\n            \"type\": \"Condition\",\n            \"description\": \"Reservation is refundable\",\n            \"attribute\": \"Refundable\",\n            \"operator\": \"==\",\n            \"value\": true\n          }\n        },\n        {\n          \"relation\": \"REQUIRES\",\n          \"target\": \"DepartureBeyond24Hours\",\n          \"properties\": {},\n          \"target_properties\": {\n            \"type\": \"Condition\",\n            \"description\": \"Departure is more than 24 hours away\",\n            \"attribute\": \"HoursUntilDeparture\",\n            \"operator\": \">\",\n            \"value\": 24\n          }\n        },\n        {\n          \"relation\": \"REQUIRES\",\n          \"target\": \"HasAuthorization\",\n          \"properties\": {},\n          \"target_properties\": {\n            \"type\": \"Condition\",\n            \"description\": \"Passenger explicitly confirmed this cancellation\",\n            \"predicate\": \"explicit_confirmation(reservation_id)\"\n          }\n        }\n      ]\n    },\n    {\n      \"node\": \"Cancelled\",\n      \"properties\": {\n        \"type\": \"Value\",\n        \"description\": \"Cancelled reservation\",\n        \"value\": \"cancelled\"\n      },\n      \"outgoing\": []\n    },\n    {\n      \"node\": \"Confirmed\",\n      \"properties\": {\n        \"type\": \"Value\",\n        \"description\": \"Active reservation\",\n        \"value\": \"confirmed\"\n      },\n      \"outgoing\": [\n        {\n          \"relation\": \"TRANSITIONS_TO\",\n          \"target\": \"Cancelled\",\n          \"properties\": {\n            \"action\": \"CancelReservation\"\n          },\n          \"target_properties\": {\n            \"type\": \"Value\",\n            \"description\": \"Cancelled reservation\",\n            \"value\": \"cancelled\"\n          }\n        }\n      ]\n    },\n    {\n      \"node\": \"Exists\",\n      \"properties\": {\n        \"type\": \"Condition\",\n        \"description\": \"Reservation exists\",\n        \"predicate\": \"exists(reservation_id)\"\n      },\n      \"outgoing\": [\n        {\n          \"relation\": \"CHECKS\",\n          \"target\": \"ReservationID\",\n          \"properties\": {},\n          \"target_properties\": {\n            \"type\": \"Attribute\",\n            \"description\": \"Unique reservation identifier\",\n            \"data_type\": \"string\"\n          }\n        }\n      ]\n    },\n    {\n      \"node\": \"HasAuthorization\",\n      \"properties\": {\n        \"type\": \"Condition\",\n        \"description\": \"Passenger explicitly confirmed this cancellation\",\n        \"predicate\": \"explicit_confirmation(reservation_id)\"\n      },\n      \"outgoing\": [\n        {\n          \"relation\": \"CHECKS\",\n          \"target\": \"ReservationID\",\n          \"properties\": {},\n          \"target_properties\": {\n            \"type\": \"Attribute\",\n            \"description\": \"Unique reservation identifier\",\n            \"data_type\": \"string\"\n          }\n        }\n      ]\n    }\n  ]\n}",
+        "succeeded": true
+      }
+    ]
+  },
+  "events": [
+    {
+      "name": "get_reservation",
+      "reservation_id": "ABC123",
+      "result": {
+        "success": true,
+        "reservation_id": "ABC123",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 72
+      },
+      "confirmed_at_call": false
+    },
+    {
+      "name": "cancel_reservation",
+      "reservation_id": "ABC123",
+      "result": {
+        "success": true,
+        "reservation_id": "ABC123",
+        "status": "cancelled"
+      },
+      "confirmed_at_call": true
+    }
+  ]
+}
