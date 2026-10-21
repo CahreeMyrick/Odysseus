@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import sys
+from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from ollama import Client
 
 from tools import Reservation, ReservationStore
 from evaluator import ToolEvent, evaluate
+from policy_validation import validate_policy_response, validate_tool_call
+from reservation_tools import ReservationTools
 
 DEFAULT_MODEL = "qwen3:8b-q4_K_M"
 STOP = "###STOP###"
@@ -76,142 +79,128 @@ def confirmed_cancellation(agent_message: str, customer_message: str, reservatio
     return asked and agreed and not declined
 
 
-def agent_turn(client: Client, model: str, history: list[dict],
-               store: ReservationStore, events: list[ToolEvent],
-               policy_queries: list[dict], turn: int,
-               authorized_ids: set[str]) -> str:
-    """Run LLM tool-call rounds until it responds to the customer."""
+def update_authorizations(agent_message: str, customer_message: str, reservation_ids: Iterable[str], authorized_ids: set[str]) -> None:
+    """Record explicit cancellation confirmations from the latest customer reply."""
+    for reservation_id in reservation_ids:
+        if confirmed_cancellation(agent_message, customer_message, reservation_id):
+            authorized_ids.add(reservation_id)
 
-    def get_reservation(reservation_id: str) -> str:
-        """Get current reservation data by ID.
 
-        Args:
-            reservation_id: Reservation to retrieve.
-        """
-        result = store.get_reservation(reservation_id)
-        events.append(ToolEvent("get_reservation", reservation_id, result))
-        return json.dumps(result)
+def agent_turn(client: Client, model: str, history: list[dict], store: ReservationStore, tool_events: list[ToolEvent], policy_queries: list[dict], turn: int, authorized_ids: set[str]) -> tuple[str, list[dict]]:
+    """Return the answer and new messages without modifying conversation history."""
 
-    def cancel_reservation(reservation_id: str) -> str:
-        """Attempt to cancel a reservation by ID. Requires policy compliance.
+    # initialize tools
+    reservation_tools = ReservationTools(store, tool_events, authorized_ids)
+    tools = {"run_policy": run_policy,
+             "get_reservation": reservation_tools.get_reservation,
+             "cancel_reservation": reservation_tools.cancel_reservation}
 
-        Args:
-            reservation_id: Reservation to cancel.
-        """
-        confirmed = reservation_id in authorized_ids
-        result = store.cancel_reservation(reservation_id)
-        events.append(ToolEvent("cancel_reservation", reservation_id, result, confirmed))
-        return json.dumps(result)
-
-    tools = {"run_policy": run_policy, "get_reservation": get_reservation,
-             "cancel_reservation": cancel_reservation}
-
-    # Consultation persists across turns within this episode. Only successful,
-    # substantive CLI responses unlock reservation operations.
-    policy_consulted = any(query["succeeded"] for query in policy_queries)
+    turn_messages: list[dict] = []
 
     for _ in range(MAX_TOOL_ROUNDS):
-        response = client.chat(model=model, messages=history,
-                               tools=list(tools.values()), think=False)
+        response = client.chat(model=model, messages=history + turn_messages, tools=list(tools.values()), think=False)
         message = response.message
-        history.append(message.model_dump(exclude_none=True))
+        turn_messages.append(message.model_dump(exclude_none=True))
         if not message.tool_calls:
-            return message.content or "(No response)"
+            return message.content or "(No response)", turn_messages
 
         for call in message.tool_calls:
             name = call.function.name
             arguments = call.function.arguments
             try:
-                if name not in tools:
-                    output = "Error: unknown tool"
-                elif name in {"get_reservation", "cancel_reservation"} and not policy_consulted:
-                    output = (
-                        "Error: Policy consultation required before reservation operations. "
-                        "Call run_policy with a relevant query or node first."
-                    )
+                validation_error = validate_tool_call(name, tools, policy_queries)
+                if validation_error is not None:
+                    output = validation_error
                 else:
                     output = tools[name](**arguments)
             except (TypeError, ValueError) as exc:
                 output = f"Error: invalid tool arguments: {exc}"
 
             if name == "run_policy":
-                succeeded = False
-                if not output.startswith(("Error:", "Policy CLI error:")):
-                    try:
-                        data = json.loads(output)
-                        if isinstance(data, dict) and "error" not in data:
-                            succeeded = bool(data.get("matches")) if "matches" in data else bool(data)
-                    except (ValueError, TypeError):
-                        succeeded = False
                 policy_queries.append({
                     "turn": turn,
                     "command": arguments,
                     "output": output,
-                    "succeeded": succeeded,
+                    "succeeded": validate_policy_response(arguments, output),
                 })
-                if succeeded:
-                    policy_consulted = True
 
             print(f"  [tool] {name}({json.dumps(arguments)}) => {output[:300]}")
-            history.append({"role": "tool", "tool_name": name, "content": output})
+            turn_messages.append({"role": "tool", "tool_name": name, "content": output})
 
     raise RuntimeError("Agent exceeded its per-turn tool-call limit")
 
 
 def simulated_user_turn(client: Client, model: str, history: list[dict]) -> str:
+    """Return the customer's next message without modifying conversation history."""
     response = client.chat(model=model, messages=history, think=False)
-    content = (response.message.content or "").strip()
-    history.append({"role": "assistant", "content": content})
-    return content
+    return (response.message.content or "").strip()
 
 
-def run_episode(client: Client, agent_model: str, user_model: str,
-                goal: str, max_turns: int) -> dict:
+def run_episode(client: Client, agent_model: str, user_model: str, goal: str, max_turns: int) -> dict:
     """Run one isolated episode; return observable benchmark results."""
+
+    # initialize database state
     store = ReservationStore([
         Reservation("ABC123", "confirmed", True, 72),
         Reservation("DEF456", "confirmed", False, 72),
         Reservation("GHI789", "confirmed", True, 12),
     ])
+
     initial = store.snapshot()
-    # This target is specific to the default example task: cancel ABC123.
-    expected = {"ABC123": {"status": "cancelled"}}
-    events: list[ToolEvent] = []
+
+    # initialize logging and state management tools
+    expected = {"ABC123": {"status": "cancelled"}} # This target is specific to the default example task: cancel ABC123.
+    tool_events: list[ToolEvent] = []
     policy_queries: list[dict] = []
     authorized_ids: set[str] = set()
     previous_agent_message = ""
     agent_history: list[dict] = [{"role": "system", "content": AGENT_PROMPT}]
-    user_history: list[dict] = [
-        {"role": "system", "content": USER_PROMPT.format(goal=goal)},
-        {"role": "user", "content": "Hello! How can I help you today?"},
-    ]
+    user_history: list[dict] = [{"role": "system", "content": USER_PROMPT.format(goal=goal)}]
 
+    # run conversation loop
     for turn in range(1, max_turns + 1):
-        customer = simulated_user_turn(client, user_model, user_history)
-        if customer == STOP:
+
+        # get user message
+        user_message = simulated_user_turn(client, user_model, user_history)
+
+        # update history
+        user_history.append({"role": "assistant", "content": user_message})
+
+        # check for termination
+        if user_message == STOP:
             print("\n[Customer ended conversation]")
             break
-        print(f"\nCustomer ({turn}): {customer}")
-        for rid in initial:
-            if confirmed_cancellation(previous_agent_message, customer, rid):
-                authorized_ids.add(rid)
-        agent_history.append({"role": "user", "content": customer})
-        answer = agent_turn(client, agent_model, agent_history, store, events, policy_queries, turn, authorized_ids)
+
+        # update history
+        agent_history.append({"role": "user", "content": user_message})
+
+        # show user message
+        print(f"\nCustomer ({turn}): {user_message}")
+
+        # track confirmed reservations
+        update_authorizations(previous_agent_message, user_message, initial, authorized_ids)
+
+        # get agent message
+        answer, turn_messages = agent_turn(client, agent_model, agent_history, store, tool_events, policy_queries, turn, authorized_ids)
         print(f"Agent: {answer}")
+
+        # update history
         previous_agent_message = answer
         user_history.append({"role": "user", "content": answer})
+        agent_history.extend(turn_messages)
     else:
         print(f"\n[Maximum {max_turns} turns reached]")
 
+    # evaluate result and save report
     final = store.snapshot()
-    result = evaluate(initial, final, expected, events)
+    result = evaluate(initial, final, expected, tool_events)
     report = {"evaluation": result.to_dict(), "initial": initial, "final": final,
               "policy_retrieval": {
                   "consulted": bool(policy_queries),
                   "successful_queries": sum(q["succeeded"] for q in policy_queries),
                   "queries": policy_queries,
               },
-              "events": [asdict(event) for event in events]}
+              "tool_events": [asdict(event) for event in tool_events]}
     print("\nEvaluation:\n" + json.dumps(report["evaluation"], indent=2))
     return report
 
@@ -238,4 +227,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
