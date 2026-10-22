@@ -39,7 +39,7 @@ private:
     DocumentProcessor document_processor_;
 };
 
-class AdapterFactory {
+class SourceFactory {
 public:
     using Creator = std::function<std::unique_ptr<SourceAdapter>(const SourceRequest&)>;
 
@@ -55,13 +55,13 @@ private:
 class IngestionPipeline {
 public:
     // Dependencies must outlive the pipeline. Each ingest owns its adapter.
-    IngestionPipeline(const AdapterFactory& factory,
+    IngestionPipeline(const SourceFactory& factory,
                       const ArtifactProcessor& processor, StorageManager& storage);
     // Fail fast: exceptions propagate; earlier writes are not rolled back.
     IngestionResult ingest(const SourceRequest& request) const;
 
 private:
-    const AdapterFactory& factory_;
+    const SourceFactory& factory_;
     const ArtifactProcessor& processor_;
     StorageManager& storage_;
 };

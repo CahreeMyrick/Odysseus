@@ -111,7 +111,7 @@ It does not *own* the logic or state of any of these events, it simply executes 
 
 1. Parse cli args
 2. Load configuration
-3. Build the IngestionApplication module
+3. Build the Ingestion module
 4. Execute Ingestion
 
 More precisely,
@@ -144,7 +144,7 @@ const auto options = parse_cli(argc, argv);
 This gives us an object of type `CliOptions` which we will use for downstream events.
 
 
-**Second Event:** Using the `options` data model, **load the configuration** to be used by the ```IngestionApplication```
+**Second Event:** Using the `options` data model, **load the configuration** to be used by the ```Ingestion```
 
 ```c++
 const auto config = load_config(options);
@@ -154,18 +154,18 @@ const auto config = load_config(options);
 **Third Event:** Using the ``config``, build the application.
 
 ```c++
-auto application = build_application(config, std::cout);
+auto ingestion_service = initialize_service(config, std::cout);
 ```
 
 
-**Fourth Event:** Execute Ingestion through the ```IngestionApplication.ingest``` method
+**Fourth Event:** Execute Ingestion through the ```Ingestion.ingest``` method
 
 ```c++
-const auto result = application.ingest(options.source)
+const auto result = ingestion_service.ingest(options.source)
 ```
 <br>
 
-#### What happens inside of `IngestionApplication.ingest(SourceRequest source)`?
+#### What happens inside of `Ingestion.ingest(SourceRequest source)`?
 
 The function accepts the following data model as input:
 
@@ -189,50 +189,30 @@ enum class SourceType {
 };
 ```
 
-When the flow of control reaches `IngestionResult IngestionApplication.ingest(SourceRequest& request)`, the following sequence of 
-events ocurr:
-
-1. Instantiate an `AdapterFactory`
-2. Register the adapter 
-3. Instantiate an `IngestionPipeline`
-4. Run the `IngestionPipline`
-
-**1. Instantiate an `AdapterFactory`**
-
-The role of the `AdapterFactory` is to help is leverage both the **Factory Design Pattern** and the **Adapter Design Pattern** for
-to dynamically instantiate the appropriate source adapter, while providing the ingestion pipeline with a common interface for interacting
-with different data sources, independent of their underlying implementations.
-
-For example:
-
-Suppose a user requests that Odysseus ingest a Github repo. The `AdapterFactory` examines the `SourceType` specified in the `SourceRequest`
-and instantiates a `GithubAdapter`, which implements the common `SourceAdapter` interface.
-
-The **Factory Design Pattern** encapsulates the creation of the appropriate adapter, while the **Adapter Design Pattern** allows Github
-specific operations to be exposed through the standardized interface expected by the `IngestionPipeline`
-
-As a result, the ingestion pipeline can acquire artifacts from Github, local files, or other supported sources without needing to know
-how each source is acessed or how its underlying APIs operate.
-
-**2. Register the adapter**
-```c++
-Adapter factory
-factory.register_source(SourceType::Github, [this](const SourcRequest& source) {return std::make_unique<GithubAdapter>(*client_, source)});
-```
-
-3. Instantiate `IngestionPipeline`
+`initialize_service()` constructs a `SourceFactory` and registers the GitHub adapter creator.
+It also registers placeholders for `LocalFile` and `Database` that throw a source-specific
+"not implemented yet" error when selected. The CLI accepts `github`, `local-file`, and
+`database`; only GitHub currently performs ingestion.
+The creator captures a shared pointer to the GitHub client, keeping it alive for the
+lifetime of the factory. The factory and storage are then moved into `Ingestion`.
 
 ```c++
-// NOTE: processor_ and storage_ are member variables of the IngestionApplication class
-// NOTE: we dereference storage_ because it is a pointer to ...
-IngestionPipline pipeline(factory, processor_, *storage_);
+SourceFactory source_factory;
+source_factory.register_source(SourceType::GitHub, [client](const SourceRequest& source) {
+    return std::make_unique<GitHubAdapter>(*client, source);
+});
 ```
 
-4. Run the ingestion pipeline
+Each call to `Ingestion::ingest()` builds a pipeline using the stored dependencies:
 
 ```c++
-pipeline.ingest(request);
+IngestionPipeline pipeline(source_factory_, processor_, *storage_);
+return pipeline.ingest(request);
 ```
+
+The pipeline asks the factory for a fresh `SourceAdapter` for each request.
+`Ingestion` therefore does not need GitHub-specific logic, and repeated ingestion
+calls each get their own adapter session.
 
 #### What happens inside of `IngestionPipeline.ingest(SourceRequest request)`?
 

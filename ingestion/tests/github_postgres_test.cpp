@@ -36,7 +36,7 @@ int main() {
         request.options["ref"] = expected.revision; // Pin both ingestions to the same immutable snapshot.
         PostgresStorage storage(url);
         storage.initialize_schema();
-        AdapterFactory factory;
+        SourceFactory factory;
         factory.register_source(SourceType::GitHub, [&client](const SourceRequest& source) {
             return std::make_unique<GitHubAdapter>(client, source);
         });

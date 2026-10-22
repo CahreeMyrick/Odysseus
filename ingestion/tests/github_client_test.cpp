@@ -70,8 +70,11 @@ int main() {
         char uri[] = "https://github.com/org/repo", flag[] = "--ref", revision[] = "main";
         char* argv[] = {program, ingest, github, uri, flag, revision};
         const auto options = parse_cli(6, argv);
-        check(!options.mock && options.source.options.at("ref") == "main");
+        check(options.source.options.at("ref") == "main");
         fails([&] { parse_cli(5, argv); }, "--ref requires");
+        char mock_flag[] = "--mock";
+        char* mock_argv[] = {program, ingest, github, uri, mock_flag};
+        fails([&] { parse_cli(5, mock_argv); }, "Unknown option: --mock");
         std::cout << "GitHub client checks passed\n";
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

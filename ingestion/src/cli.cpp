@@ -20,8 +20,6 @@ CliOptions parse_cli(int argc, char* argv[]) {
         const std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
             options.help = true;
-        } else if (arg == "--mock") {
-            options.mock = true;
         } else if (arg == "--ref") {
             if (++i >= argc || std::string(argv[i]).empty() || std::string(argv[i]).front() == '-')
                 throw CliError("--ref requires a branch, tag, or commit");
@@ -36,26 +34,22 @@ CliOptions parse_cli(int argc, char* argv[]) {
     }
     if (options.help) return options;
     if (positional.size() != 3 || positional[0] != "ingest") {
-        throw CliError("Expected: ingest github <repository-uri>");
+        throw CliError("Expected: ingest <source> <source-uri>");
     }
-    if (positional[1] != "github") {
-        throw CliError("Unsupported source: " + positional[1] + "; only github is implemented");
+    try {
+        options.source.type = parse_source_type(positional[1]);
+    } catch (const std::invalid_argument& error) {
+        throw CliError(error.what());
     }
-    options.source.type = parse_source_type(positional[1]);
     options.source.uri = positional[2];
-    if (options.source.uri.empty()) throw CliError("Repository URI must not be empty");
-    if (options.mock && options.source.options.contains("ref"))
-        throw CliError("--ref cannot be used with --mock");
+    if (options.source.uri.empty()) throw CliError("Source URI must not be empty");
     return options;
 }
 
-ApplicationConfig load_config(const CliOptions& options) {
-    ApplicationConfig config;
+IngestionConfig load_config(const CliOptions& options) {
+    IngestionConfig config;
     config.output = options.output;
-    config.mock = options.mock;
-    if (!config.mock) {
-        if (const char* token = std::getenv("GITHUB_TOKEN")) config.github_token = token;
-    }
+    if (const char* token = std::getenv("GITHUB_TOKEN")) config.github_token = token;
     if (config.output == OutputMode::Postgres) {
         const char* value = std::getenv("ODYSSEUS_DATABASE_URL");
         if (!value || !*value) {
@@ -67,11 +61,11 @@ ApplicationConfig load_config(const CliOptions& options) {
 }
 
 void print_usage(std::ostream& output) {
-    output << "Usage: odysseus ingest github <repository-uri> [--ref REVISION] [--mock] [--postgres]\n"
+    output << "Usage: odysseus ingest <source> <source-uri> [--ref REVISION] [--postgres]\n"
            << "       odysseus --help\n\n"
-           << "  --ref       Branch, tag, or commit; defaults to the default branch.\n"
-           << "  --mock      Use the built-in repository (no GitHub requests).\n"
-           << "              URI: https://github.com/example/mock-repo\n"
+           << "Sources: github, local-file, database\n"
+           << "  local-file and database are not implemented yet.\n\n"
+           << "  --ref       GitHub branch, tag, or commit; defaults to the default branch.\n"
            << "  --postgres  Store results using ODYSSEUS_DATABASE_URL.\n"
            << "              Without this flag, print results.\n";
 }

@@ -39,7 +39,7 @@ int main() {
         storage.initialize_schema();
         storage.initialize_schema(); // Startup is repeatable, not destructive.
         auto client = example_repository();
-        AdapterFactory factory;
+        SourceFactory factory;
         factory.register_source(SourceType::GitHub, [&client](const SourceRequest& source) {
             return std::make_unique<GitHubAdapter>(client, source);
         });

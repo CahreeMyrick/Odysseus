@@ -6,7 +6,7 @@
 
 namespace odysseus::ingestion {
 
-void AdapterFactory::register_source(SourceType type, Creator creator) {
+void SourceFactory::register_source(SourceType type, Creator creator) {
     if (!creator) {
         throw std::invalid_argument("Source creator must not be empty");
     }
@@ -15,7 +15,7 @@ void AdapterFactory::register_source(SourceType type, Creator creator) {
     }
 }
 
-std::unique_ptr<SourceAdapter> AdapterFactory::create(const SourceRequest& request) const {
+std::unique_ptr<SourceAdapter> SourceFactory::create(const SourceRequest& request) const {
     if (request.uri.empty()) {
         throw std::invalid_argument("Source URI must not be empty");
     }
@@ -30,7 +30,7 @@ std::unique_ptr<SourceAdapter> AdapterFactory::create(const SourceRequest& reque
     return adapter;
 }
 
-IngestionPipeline::IngestionPipeline(const AdapterFactory& factory,
+IngestionPipeline::IngestionPipeline(const SourceFactory& factory,
                                    const ArtifactProcessor& processor,
                                    StorageManager& storage)
     : factory_(factory), processor_(processor), storage_(storage) {}

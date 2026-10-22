@@ -22,7 +22,7 @@ string(APPEND INITIAL_SCHEMA_SQL "\n${INDEXING_SCHEMA_SQL}")
 # Generate the schema header from its template, substituting only @VAR@ placeholders.
 configure_file(src/schema_sql.hpp.in generated/schema_sql.hpp @ONLY)
 # Build the ingestion library from its implementation source files.
-add_library(ingestion src/pipeline.cpp src/github_adapter.cpp src/processors.cpp src/storage.cpp src/postgres_storage.cpp src/cli.cpp src/application.cpp src/content_classifier.cpp src/http_transport.cpp src/rest_github_client.cpp src/indexing.cpp src/code_extractor.cpp)
+add_library(ingestion src/pipeline.cpp src/github_adapter.cpp src/processors.cpp src/storage.cpp src/postgres_storage.cpp src/cli.cpp src/ingestion.cpp src/content_classifier.cpp src/http_transport.cpp src/rest_github_client.cpp src/indexing.cpp src/code_extractor.cpp)
 # Require C++17 features for the ingestion library and its consumers.
 target_compile_features(ingestion PUBLIC cxx_std_17)
 # Expose the ingestion include directory and repository root to the library and its consumers.
@@ -91,9 +91,7 @@ if(BUILD_TESTING)
     target_link_libraries(ingestion_tests PRIVATE ingestion)
     # Register the ingestion pipeline tests with CTest.
     add_test(NAME ingestion_pipeline COMMAND ingestion_tests)
-    # Register a CLI test that ingests the example GitHub repository using mock data.
-    add_test(NAME mock_repository_cli COMMAND odysseus ingest github https://github.com/example/mock-repo --mock)
-    # Require the mock CLI test output to match "Printed 4 artifacts".
-    set_tests_properties(mock_repository_cli PROPERTIES PASS_REGULAR_EXPRESSION "Printed 4 artifacts")
+    add_test(NAME cli_help COMMAND odysseus --help)
+    set_tests_properties(cli_help PROPERTIES PASS_REGULAR_EXPRESSION "Usage: odysseus ingest <source>")
 # End the optional test configuration.
 endif()

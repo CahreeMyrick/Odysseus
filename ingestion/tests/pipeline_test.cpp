@@ -6,6 +6,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+#include <utility>
 
 using namespace odysseus::ingestion;
 
@@ -37,8 +38,38 @@ SourceRequest request_for(const std::string& uri = "https://github.com/example/m
 }
 int main() {
     try {
+        std::ostringstream placeholder_output;
+        auto initialized_service = initialize_service(IngestionConfig{}, placeholder_output);
+        char program[] = "odysseus", command[] = "ingest", uri[] = "example";
+        char local[] = "local-file", database[] = "database", unknown[] = "unknown";
+        for (auto source : {local, database}) {
+            char* args[] = {program, command, source, uri};
+            const auto options = parse_cli(4, args);
+            const std::string expected = options.source.type == SourceType::LocalFile
+                ? "Local-file ingestion is not implemented yet"
+                : "Database ingestion is not implemented yet";
+            expect_error([&] { initialized_service.ingest(options.source); }, expected);
+        }
+        check(placeholder_output.str().empty(), "Unimplemented source wrote output");
+        char* unknown_args[] = {program, command, unknown, uri};
+        expect_error([&] { parse_cli(4, unknown_args); }, "Unknown source type");
+        std::ostringstream service_output;
+        auto service_client = std::make_shared<MockGitHubClient>(example_repository());
+        SourceFactory service_factory;
+        service_factory.register_source(SourceType::GitHub,
+            [service_client](const SourceRequest& source) {
+                return std::make_unique<GitHubAdapter>(*service_client, source);
+            });
+        Ingestion service(std::move(service_factory), std::make_unique<PrintStorage>(service_output));
+        auto moved_service = std::move(service);
+        check(moved_service.ingest(request_for()).artifacts_stored == 4,
+              "Moved ingestion service failed");
+        check(moved_service.ingest(request_for()).artifacts_stored == 4,
+              "Repeated ingestion must create a fresh adapter");
+        expect_error([] { Ingestion invalid(SourceFactory{}, nullptr); },
+                     "requires storage");
         auto client = example_repository();
-        AdapterFactory factory;
+        SourceFactory factory;
         factory.register_source(SourceType::GitHub, [&client](const SourceRequest& source) {
             return std::make_unique<GitHubAdapter>(client, source);
         });
@@ -46,7 +77,7 @@ int main() {
         RecordingStorage storage;
         IngestionPipeline pipeline(factory, processor, storage);
         auto request = request_for();
-        AdapterFactory unregistered;
+        SourceFactory unregistered;
         expect_error([&] { unregistered.create(request); }, "no adapter registered");
         expect_error([&] { unregistered.register_source(SourceType::GitHub, {}); },
                      "must not be empty");
@@ -55,7 +86,7 @@ int main() {
                 return std::make_unique<GitHubAdapter>(client, source);
             });
         }, "already registered");
-        AdapterFactory invalid_creator;
+        SourceFactory invalid_creator;
         invalid_creator.register_source(SourceType::GitHub, [](const SourceRequest&) {
             return std::unique_ptr<SourceAdapter>{};
         });
@@ -110,14 +141,14 @@ int main() {
         expect_error([&] { factory.create(request_for("")); }, "must not be empty");
         expect_error([&] { factory.create(request_for("missing")); }, "not found");
         MockGitHubClient empty("empty", {"revision", {}});
-        AdapterFactory empty_factory;
+        SourceFactory empty_factory;
         empty_factory.register_source(SourceType::GitHub, [&empty](const SourceRequest& source) {
             return std::make_unique<GitHubAdapter>(empty, source);
         });
         IngestionPipeline empty_pipeline(empty_factory, processor, storage);
         check(empty_pipeline.ingest(request_for("empty")).artifacts_stored == 0, "Empty repo failed");
         MockGitHubClient bad("bad", {"revision", {{"ok.cpp", ""}, {"image.png", "bytes"}, {"later.cpp", ""}}});
-        AdapterFactory bad_factory;
+        SourceFactory bad_factory;
         bad_factory.register_source(SourceType::GitHub, [&bad](const SourceRequest& source) {
             return std::make_unique<GitHubAdapter>(bad, source);
         });
@@ -133,7 +164,7 @@ int main() {
         check(summary.str().find("Skipped 1 unsupported files") != std::string::npos,
               "CLI did not report skipped files");
         MockGitHubClient unsupported_client("unsupported", {"revision", {{"image.png", "bytes"}}});
-        AdapterFactory unsupported_factory;
+        SourceFactory unsupported_factory;
         unsupported_factory.register_source(SourceType::GitHub,
             [&unsupported_client](const SourceRequest& source) {
                 return std::make_unique<GitHubAdapter>(unsupported_client, source);
@@ -145,7 +176,7 @@ int main() {
               unsupported_storage.models.empty(), "Unsupported-only repository failed");
         MockGitHubClient binary_client("binary", {"revision", {
             {"first.cpp", ""}, {"binary.txt", std::string("a\0b", 3)}, {"last.md", ""}}});
-        AdapterFactory binary_factory;
+        SourceFactory binary_factory;
         binary_factory.register_source(SourceType::GitHub,
             [&binary_client](const SourceRequest& source) {
                 return std::make_unique<GitHubAdapter>(binary_client, source);
