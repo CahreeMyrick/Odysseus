@@ -64,4 +64,5 @@ CMakeUserPresets.json
 
 # Local documentation (keep the development plan)
 /docs/*
-!/docs/dev_plan.md
+!/docs/devlog.md
+!/docs/manifesto.md

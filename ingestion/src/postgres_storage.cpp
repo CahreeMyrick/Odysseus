@@ -12,8 +12,7 @@ namespace {
 using Connection = std::unique_ptr<PGconn, decltype(&PQfinish)>;
 using Result = std::unique_ptr<PGresult, decltype(&PQclear)>;
 
-Result run(PGconn* connection, const char* sql,
-             const std::vector<std::string>& parameters = {}) {
+Result run(PGconn* connection, const char* sql, const std::vector<std::string>& parameters = {}) {
     std::vector<const char*> values;
     for (const auto& parameter : parameters) {
         if (parameter.find('\0') != std::string::npos) {
@@ -21,22 +20,16 @@ Result run(PGconn* connection, const char* sql,
         }
         values.push_back(parameter.c_str());
     }
-    Result result(parameters.empty()
-        ? PQexec(connection, sql)
-        : PQexecParams(connection, sql, static_cast<int>(values.size()), nullptr,
-                       values.data(), nullptr, nullptr, 0), &PQclear);
-    if (!result || (PQresultStatus(result.get()) != PGRES_COMMAND_OK &&
-                    PQresultStatus(result.get()) != PGRES_TUPLES_OK)) {
+    Result result(parameters.empty() ? PQexec(connection, sql) : PQexecParams(connection, sql, static_cast<int>(values.size()), nullptr, values.data(), nullptr, nullptr, 0), &PQclear);
+    if (!result || (PQresultStatus(result.get()) != PGRES_COMMAND_OK && PQresultStatus(result.get()) != PGRES_TUPLES_OK)) {
         // Avoid echoing data, credentials, or SQL values from server diagnostics.
         const char* state = result ? PQresultErrorField(result.get(), PG_DIAG_SQLSTATE) : nullptr;
-        throw std::runtime_error("PostgreSQL command failed (SQLSTATE " +
-                                 std::string(state ? state : "unavailable") + ")");
+        throw std::runtime_error("PostgreSQL command failed (SQLSTATE " + std::string(state ? state : "unavailable") + ")");
     }
     return result;
 }
 
-void execute(PGconn* connection, const char* sql,
-             const std::vector<std::string>& parameters = {}) {
+void execute(PGconn* connection, const char* sql, const std::vector<std::string>& parameters = {}) {
     (void)run(connection, sql, parameters);
 }
 
@@ -62,8 +55,7 @@ private:
 
 struct PostgresStorage::Impl {
     Connection connection;
-    explicit Impl(const std::string& connection_string)
-        : connection(PQconnectdb(connection_string.c_str()), &PQfinish) {
+    explicit Impl(const std::string& connection_string) : connection(PQconnectdb(connection_string.c_str()), &PQfinish) {
         if (!connection || PQstatus(connection.get()) != CONNECTION_OK) {
             throw std::runtime_error("Unable to connect to PostgreSQL; check ODYSSEUS_DATABASE_URL");
         }
@@ -73,8 +65,7 @@ struct PostgresStorage::Impl {
     }
 };
 
-PostgresStorage::PostgresStorage(const std::string& connection_string)
-    : impl_(std::make_unique<Impl>(connection_string)) {}
+PostgresStorage::PostgresStorage(const std::string& connection_string) : impl_(std::make_unique<Impl>(connection_string)) {}
 PostgresStorage::~PostgresStorage() = default;
 
 void PostgresStorage::initialize_schema() {

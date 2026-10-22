@@ -30,10 +30,7 @@ std::unique_ptr<SourceAdapter> SourceFactory::create(const SourceRequest& reques
     return adapter;
 }
 
-IngestionPipeline::IngestionPipeline(const SourceFactory& factory,
-                                   const ArtifactProcessor& processor,
-                                   StorageManager& storage)
-    : factory_(factory), processor_(processor), storage_(storage) {}
+IngestionPipeline::IngestionPipeline(const SourceFactory& factory, const ArtifactProcessor& processor, StorageManager& storage) : factory_(factory), processor_(processor), storage_(storage) {}
 
 IngestionResult IngestionPipeline::ingest(const SourceRequest& request) const {
     IngestionResult result;

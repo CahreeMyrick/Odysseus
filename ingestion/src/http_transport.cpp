@@ -15,8 +15,7 @@ size_t receive(char* data, size_t size, size_t count, void* context) noexcept {
 HttpResponse CurlTransport::get(const std::string& url, const std::vector<std::string>& headers) {
     return request("GET", url, headers, "");
 }
-HttpResponse CurlTransport::request(const std::string& method, const std::string& url,
-                                    const std::vector<std::string>& headers, const std::string& body) {
+HttpResponse CurlTransport::request(const std::string& method, const std::string& url, const std::vector<std::string>& headers, const std::string& body) {
     static const auto initialized = curl_global_init(CURL_GLOBAL_DEFAULT);
     if (initialized != CURLE_OK) throw std::runtime_error("Cannot initialize HTTP transport");
     std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> handle(curl_easy_init(), curl_easy_cleanup);

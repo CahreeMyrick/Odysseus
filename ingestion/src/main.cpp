@@ -21,6 +21,8 @@ int main(int argc, char* argv[]) {
 
         // perform ingestion
         const auto result = ingestion_service.ingest(options.source);
+        
+        // print result
         print_result(std::cout, result, options);
         return 0;
 
