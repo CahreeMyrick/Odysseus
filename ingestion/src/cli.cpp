@@ -15,6 +15,20 @@ SourceType parse_source_type(const std::string& value) {
 
 CliOptions parse_cli(int argc, char* argv[]) {
     CliOptions options;
+    if (argc > 1 && std::string(argv[1]) == "graph-export") {
+        options.graph_export = true;
+        if (argc == 3 && (std::string(argv[2]) == "--help" || std::string(argv[2]) == "-h")) {
+            options.help = true;
+            return options;
+        }
+        if (argc != 5 || std::string(argv[3]) != "--output" ||
+            std::string(argv[2]).empty() || std::string(argv[2]).front() == '-' ||
+            std::string(argv[4]).empty() || std::string(argv[4]).front() == '-')
+            throw CliError("Expected: graph-export <input-directory> --output <graph.json>");
+        options.graph_input = argv[2];
+        options.graph_output = argv[4];
+        return options;
+    }
     std::vector<std::string> positional;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -72,6 +86,7 @@ IngestionConfig load_config(const CliOptions& options) {
 
 void print_usage(std::ostream& output) {
     output << "Usage: odysseus ingest <source> <source-uri> [--ref REVISION] [--postgres | --local DIRECTORY]\n"
+           << "       odysseus graph-export <input-directory> --output <graph.json>\n"
            << "       odysseus --help\n\n"
            << "Sources: github, local-file, database\n"
            << "  local-file and database are not implemented yet.\n\n"

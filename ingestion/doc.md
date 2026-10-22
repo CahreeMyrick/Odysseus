@@ -246,3 +246,50 @@ scopes, parser versions, and diagnostics. Repository paths are stored in
 structure, not a copy of the original source text; document models include text.
 If ingestion fails midway, files already written remain in the output directory.
 Use a new directory for another run.
+
+### Exporting a local knowledge graph
+
+After exporting models with `--local`, convert them without any services running:
+
+```bash
+./build/ingestion-debug/odysseus graph-export ./exports/run-1 --output ./exports/graph.json
+```
+
+The output parent directory must exist, and the output file must not exist.
+The command reads regular `.json` files directly in the input directory (not
+recursively). Keep graph outputs outside the model directory so a future run
+does not mistake them for model exports. An empty directory produces an empty graph.
+All inputs are validated before the output file is created. Errors identify the
+input filename; output creation is exclusive, and detected write failures remove
+the incomplete file. The conversion holds the graph in memory.
+
+The format is defined in `schemas/graph.schema.json`: `schema_version: 1`,
+`nodes` with `id`, `type`, and `properties`, and `edges` with `source`, `type`,
+`target`, and `properties`. Supported relationships are:
+
+- Repository → `HAS_REVISION` → Revision
+- Revision → `CONTAINS` → File
+- File → `DEFINES` → Function or Class (including structs and unions)
+- File → `CONTAINS` → CallSite
+- Function → `HAS_CALL_SITE` → CallSite
+
+File properties preserve metadata and provenance; code file properties also
+include parser metadata, parse status, and diagnostics. Function/class/call-site
+properties preserve the extracted records, including their source spans and
+file-local IDs. The enclosing node ID is the globally scoped identity. Call
+sites remain unresolved; no target function or `CALLS` edge is inferred. Document
+models produce file nodes only. Includes and lexical scopes remain in the input
+models and are not projected in this version.
+
+Code inputs must use model schema version 2; unversioned document exports are
+also supported. IDs are serialized JSON tuples scoped by repository, revision,
+path, model type, extractor version, and occurrence. Treat IDs as opaque strings;
+source edits can change occurrence identities. Repository/revision nodes and
+identical duplicate records are deduplicated. Conflicting file records and
+unknown caller IDs are rejected. Nodes and edges are sorted by identity, so the
+same records produce identical output regardless of file order.
+
+`build_graph()` in `ingestion/include/graph_export.hpp` is the reusable in-memory
+converter. The existing Neo4j writer and its task/generation IDs are unchanged.
+The JSON Schema validates record shape; endpoint integrity and identity
+consistency are enforced by the converter.

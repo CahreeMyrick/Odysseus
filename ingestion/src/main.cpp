@@ -1,4 +1,5 @@
 #include "cli.hpp"
+#include "graph_export.hpp"
 #include <exception>
 #include <iostream>
 
@@ -10,6 +11,13 @@ int main(int argc, char* argv[]) {
         const auto options = parse_cli(argc, argv);
         if (options.help) {
             print_usage(std::cout);
+            return 0;
+        }
+
+        if (options.graph_export) {
+            const auto graph = export_graph(options.graph_input, options.graph_output);
+            std::cout << "Exported " << graph.nodes.size() << " nodes and " << graph.edges.size()
+                      << " edges to " << options.graph_output << '\n';
             return 0;
         }
 
@@ -32,7 +40,7 @@ int main(int argc, char* argv[]) {
         return 2;
 
     } catch (const std::exception& error) {
-        std::cerr << "Ingestion failed: " << error.what() << '\n';
+        std::cerr << "Operation failed: " << error.what() << '\n';
         return 1;
     }
 }

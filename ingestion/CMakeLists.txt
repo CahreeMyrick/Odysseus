@@ -22,7 +22,7 @@ string(APPEND INITIAL_SCHEMA_SQL "\n${INDEXING_SCHEMA_SQL}")
 # Generate the schema header from its template, substituting only @VAR@ placeholders.
 configure_file(src/schema_sql.hpp.in generated/schema_sql.hpp @ONLY)
 # Build the ingestion library from its implementation source files.
-add_library(ingestion src/pipeline.cpp src/github_adapter.cpp src/processors.cpp src/storage.cpp src/postgres_storage.cpp src/cli.cpp src/ingestion.cpp src/content_classifier.cpp src/http_transport.cpp src/rest_github_client.cpp src/indexing.cpp src/code_extractor.cpp)
+add_library(ingestion src/pipeline.cpp src/github_adapter.cpp src/processors.cpp src/storage.cpp src/postgres_storage.cpp src/cli.cpp src/ingestion.cpp src/content_classifier.cpp src/http_transport.cpp src/rest_github_client.cpp src/indexing.cpp src/code_extractor.cpp src/graph_export.cpp)
 # Require C++17 features for the ingestion library and its consumers.
 target_compile_features(ingestion PUBLIC cxx_std_17)
 # Expose the ingestion include directory and repository root to the library and its consumers.
@@ -49,6 +49,10 @@ target_link_libraries(odysseus-index PRIVATE ingestion)
 include(CTest)
 # Create and register tests when BUILD_TESTING is enabled.
 if(BUILD_TESTING)
+    add_executable(graph_export_tests tests/graph_export_test.cpp)
+    target_include_directories(graph_export_tests PRIVATE src)
+    target_link_libraries(graph_export_tests PRIVATE ingestion)
+    add_test(NAME graph_export COMMAND graph_export_tests)
     add_executable(graph_projection_tests tests/graph_projection_test.cpp)
     target_include_directories(graph_projection_tests PRIVATE src)
     target_link_libraries(graph_projection_tests PRIVATE ingestion)

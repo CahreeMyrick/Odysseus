@@ -7,6 +7,9 @@
 namespace odysseus::ingestion {
 
 struct CliOptions {
+    bool graph_export = false;
+    std::string graph_input;
+    std::string graph_output;
     SourceRequest source;
     OutputMode output = OutputMode::Print;
     std::string output_directory;
