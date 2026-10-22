@@ -3,6 +3,8 @@
 #include "cli.hpp"
 
 #include <iostream>
+#include <fstream>
+#include <chrono>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -197,6 +199,44 @@ int main() {
         check(output.str().find("[code] ok.cpp") != std::string::npos, "Print storage failed");
         output.setstate(std::ios::badbit);
         expect_error([&] { printer.write(partial.models[0]); }, "Failed to write");
+        const auto export_dir = std::filesystem::temp_directory_path() /
+            ("odysseus-local-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() { std::error_code error; std::filesystem::remove_all(path, error); }
+        } cleanup{export_dir};
+        LocalStorage local_storage(export_dir.string());
+        expect_error([&] { LocalStorage duplicate(export_dir.string()); }, "already exists");
+        IngestionPipeline local_pipeline(factory, processor, local_storage);
+        check(local_pipeline.ingest(request_for()).artifacts_stored == 4, "Local export count failed");
+        std::ifstream code_file(export_dir / "1.json");
+        odysseus::json code_record;
+        code_file >> code_record;
+        check(code_record.at("model_type") == "code", "Local model type missing");
+        check(code_record.at("artifact_id") == first_id, "Local artifact identity lost");
+        check(!code_record.at("model").at("functions").empty(), "Local functions lost");
+        check(code_record.at("model").at("parser").at("name") == "tree-sitter", "Local parser lost");
+        check(code_record.at("model").at("file").at("provenance").at("snapshot_id") == "mock-commit-1",
+              "Local provenance lost");
+        std::ifstream doc_file(export_dir / "3.json");
+        odysseus::json doc_record;
+        doc_file >> doc_record;
+        check(doc_record.at("model_type") == "document" &&
+              doc_record.at("model").at("sections").at(0).at("text") == "# Mock repository\nA small ingestion fixture.\n",
+              "Local document lost");
+        char github[] = "github", local_flag[] = "--local", directory[] = "export", postgres[] = "--postgres";
+        char* local_args[] = {program, command, github, uri, local_flag, directory, postgres};
+        const auto local_options = parse_cli(6, local_args);
+        check(local_options.output == OutputMode::Local &&
+              load_config(local_options).output_directory == "export", "Local CLI configuration failed");
+        expect_error([&] { parse_cli(5, local_args); }, "requires an output directory");
+        expect_error([&] { parse_cli(7, local_args); }, "Choose only one output");
+        char* reverse_args[] = {program, command, github, uri, postgres, local_flag, directory};
+        expect_error([&] { parse_cli(7, reverse_args); }, "Choose only one output");
+        std::ostringstream local_summary;
+        print_result(local_summary, {4, 0}, local_options);
+        check(local_summary.str().find("Saved 4 models to export") != std::string::npos,
+              "Local summary failed");
         std::cout << "All pipeline checks passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

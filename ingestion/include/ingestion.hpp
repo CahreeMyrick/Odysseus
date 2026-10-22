@@ -7,10 +7,11 @@
 
 namespace odysseus::ingestion {
 
-enum class OutputMode { Print, Postgres };
+enum class OutputMode { Print, Postgres, Local };
 
 struct IngestionConfig {
     OutputMode output = OutputMode::Print;
+    std::string output_directory;
     std::string database_url;
     std::string github_token;
 };

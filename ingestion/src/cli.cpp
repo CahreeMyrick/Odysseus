@@ -24,7 +24,16 @@ CliOptions parse_cli(int argc, char* argv[]) {
             if (++i >= argc || std::string(argv[i]).empty() || std::string(argv[i]).front() == '-')
                 throw CliError("--ref requires a branch, tag, or commit");
             options.source.options["ref"] = argv[i];
+        } else if (arg == "--local") {
+            if (options.output != OutputMode::Print)
+                throw CliError("Choose only one output option: --local or --postgres");
+            if (++i >= argc || std::string(argv[i]).empty() || std::string(argv[i]).front() == '-')
+                throw CliError("--local requires an output directory");
+            options.output = OutputMode::Local;
+            options.output_directory = argv[i];
         } else if (arg == "--postgres") {
+            if (options.output != OutputMode::Print)
+                throw CliError("Choose only one output option: --local or --postgres");
             options.output = OutputMode::Postgres;
         } else if (!arg.empty() && arg.front() == '-') {
             throw CliError("Unknown option: " + arg);
@@ -49,6 +58,7 @@ CliOptions parse_cli(int argc, char* argv[]) {
 IngestionConfig load_config(const CliOptions& options) {
     IngestionConfig config;
     config.output = options.output;
+    config.output_directory = options.output_directory;
     if (const char* token = std::getenv("GITHUB_TOKEN")) config.github_token = token;
     if (config.output == OutputMode::Postgres) {
         const char* value = std::getenv("ODYSSEUS_DATABASE_URL");
@@ -61,20 +71,26 @@ IngestionConfig load_config(const CliOptions& options) {
 }
 
 void print_usage(std::ostream& output) {
-    output << "Usage: odysseus ingest <source> <source-uri> [--ref REVISION] [--postgres]\n"
+    output << "Usage: odysseus ingest <source> <source-uri> [--ref REVISION] [--postgres | --local DIRECTORY]\n"
            << "       odysseus --help\n\n"
            << "Sources: github, local-file, database\n"
            << "  local-file and database are not implemented yet.\n\n"
            << "  --ref       GitHub branch, tag, or commit; defaults to the default branch.\n"
            << "  --postgres  Store results using ODYSSEUS_DATABASE_URL.\n"
-           << "              Without this flag, print results.\n";
+           << "  --local     Save model JSON files in a new directory.\n"
+           << "              Without an output option, print source contents.\n";
 }
 
 void print_result(std::ostream& output, const IngestionResult& result,
                   const CliOptions& options) {
     const bool postgres = options.output == OutputMode::Postgres;
-    output << (postgres ? "Stored " : "Printed ") << result.artifacts_stored
-           << (postgres ? " artifacts in PostgreSQL.\n" : " artifacts.\n");
+    if (options.output == OutputMode::Local) {
+        output << "Saved " << result.artifacts_stored << " models to "
+               << options.output_directory << ".\n";
+    } else {
+        output << (postgres ? "Stored " : "Printed ") << result.artifacts_stored
+               << (postgres ? " artifacts in PostgreSQL.\n" : " artifacts.\n");
+    }
     output << "Skipped " << result.artifacts_skipped << " unsupported files.\n";
 }
 

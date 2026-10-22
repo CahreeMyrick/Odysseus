@@ -66,3 +66,6 @@ CMakeUserPresets.json
 /docs/*
 !/docs/devlog.md
 !/docs/manifesto.md
+
+# processed artifacts
+/github_artifacts

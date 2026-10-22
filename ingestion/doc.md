@@ -227,3 +227,22 @@ calls each get their own adapter session.
 <br>
 
 ### Indexing Data into Qdrant & Neo4j
+
+### Exporting models locally
+
+```bash
+./build/ingestion-debug/odysseus ingest github https://github.com/OWNER/REPO --local ./exports/run-1
+```
+
+Add `--ref BRANCH_OR_COMMIT` to select a revision. `--local` and `--postgres`
+are mutually exclusive. The destination must not already exist; parent directories
+are created automatically. No database server is needed for local output.
+
+Each supported artifact becomes a pretty-printed JSON file (`1.json`, `2.json`,
+etc.) containing `artifact_id`, `model_type`, and `model`. The model includes
+file metadata, repository provenance, and—for code—functions, classes, calls,
+scopes, parser versions, and diagnostics. Repository paths are stored in
+`model.file.path`, not used as output filenames. Code exports contain extracted
+structure, not a copy of the original source text; document models include text.
+If ingestion fails midway, files already written remain in the output directory.
+Use a new directory for another run.

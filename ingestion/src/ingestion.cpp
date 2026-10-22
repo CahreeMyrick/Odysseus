@@ -40,6 +40,8 @@ Ingestion initialize_service(const IngestionConfig& config, std::ostream& output
         auto database = std::make_unique<PostgresStorage>(config.database_url);
         database->initialize_schema();
         storage = std::move(database);
+    } else if (config.output == OutputMode::Local) {
+        storage = std::make_unique<LocalStorage>(config.output_directory);
     } else {
         storage = std::make_unique<PrintStorage>(output);
     }

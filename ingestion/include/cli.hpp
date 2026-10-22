@@ -9,6 +9,7 @@ namespace odysseus::ingestion {
 struct CliOptions {
     SourceRequest source;
     OutputMode output = OutputMode::Print;
+    std::string output_directory;
     bool help = false;
 };
 
