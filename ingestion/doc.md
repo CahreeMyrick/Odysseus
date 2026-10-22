@@ -42,17 +42,37 @@ Once ingestion is complete, the team's information becomes available to downstre
 
 #### Compiling
 
-We build the system with the following commands:
+Requires CMake 3.18+, a C/C++ compiler, nlohmann-json 3.11+, PostgreSQL client
+headers, and libcurl development headers. On Ubuntu:
+
+```bash
+sudo apt-get install build-essential cmake nlohmann-json3-dev libpq-dev libcurl4-openssl-dev
+```
+
+The initial configuration downloads pinned, SHA-256-verified Tree-sitter runtime
+and C/C++ grammar sources from GitHub, so it requires network access.
+
+Run these commands from the repository root:
 
 ```bash
 # Configure the build
-cmake -S Ingestion -B build/ingestion
+cmake -S ingestion -B build/ingestion -DBUILD_TESTING=ON
 ```
 
 ```bash
 # Compile the project
 cmake --build build/ingestion
 ```
+
+Run the test suite after building:
+
+```bash
+ctest --test-dir build/ingestion --output-on-failure
+```
+
+Database integration tests skip unless `ODYSSEUS_TEST_DATABASE_URL` and
+`ODYSSEUS_GITHUB_TEST_DATABASE_URL`, respectively, point to isolated empty test
+databases. The latter test also requires access to GitHub.
 
 ### Command Line Interface (CLI)
 
