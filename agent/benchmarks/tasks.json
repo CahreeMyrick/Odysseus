@@ -1,0 +1,23 @@
+[
+  {
+    "id": "locate-helper",
+    "question": "In helpers.cpp, what value does helper return? Cite the implementation.",
+    "answer_contains": ["42"],
+    "expected_evidence_paths": ["helpers.cpp"],
+    "review_rubric": "Must read and cite helpers.cpp; do not substitute the helper in other.cpp."
+  },
+  {
+    "id": "ambiguous-helper",
+    "question": "Are there multiple helper function definitions in this repository? Locate and distinguish them.",
+    "answer_contains": ["helper"],
+    "expected_evidence_paths": ["helpers.cpp", "other.cpp"],
+    "review_rubric": "Identify global helper returning 42 and other::helper returning 7, with source evidence."
+  },
+  {
+    "id": "call-resolution",
+    "question": "Does the available evidence prove which function definition the call in run() targets? Explain any limits.",
+    "answer_contains": [],
+    "expected_evidence_paths": ["main.cpp"],
+    "review_rubric": "Distinguish the visible helper() call from the unresolved graph call site; do not present a graph-resolved target. Source-based conclusions must be qualified by the evidence inspected."
+  }
+]
