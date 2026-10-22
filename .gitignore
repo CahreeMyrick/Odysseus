@@ -1,3 +1,24 @@
+# Python environments, bytecode, and packaging artifacts
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+
+# Python test, coverage, and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
 # CMake build directories and generated files
 build/
 cmake-build-*/
