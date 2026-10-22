@@ -98,6 +98,8 @@ def agent_turn(client: Client, model: str, history: list[dict], store: Reservati
     turn_messages: list[dict] = []
 
     for _ in range(MAX_TOOL_ROUNDS):
+
+        # get agent response from ollama client
         response = client.chat(model=model, messages=history + turn_messages, tools=list(tools.values()), think=False)
         message = response.message
         turn_messages.append(message.model_dump(exclude_none=True))
