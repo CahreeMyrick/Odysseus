@@ -28,8 +28,7 @@ void require_text(const Artifact& artifact) {
 
 code::FileModel CodeProcessor::process(const Artifact& artifact) const {
     require_text(artifact);
-    const auto language = artifact.metadata.value("language", std::string{}) == "C"
-        ? CodeLanguage::C : CodeLanguage::Cpp;
+    const auto language = artifact.metadata.value("language", std::string{}) == "C" ? CodeLanguage::C : CodeLanguage::Cpp;
     code::FileModel model = CodeExtractor::extract(artifact.content.text, language);
     model.file = metadata(artifact);
     model.file.metadata["syntax_extracted"] = true;

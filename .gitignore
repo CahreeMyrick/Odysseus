@@ -69,3 +69,5 @@ CMakeUserPresets.json
 
 # processed artifacts
 /github_artifacts
+/exports
+/agent/docs

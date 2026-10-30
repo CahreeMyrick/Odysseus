@@ -1,5 +1,8 @@
 """Narrow model-callable inspection tools returning structured evidence."""
 import inspect
+from typing import Callable
+
+from .tool_registry import available_tools, llm_tool
 
 from .config import Config
 from .evidence import EvidenceStore
@@ -14,11 +17,9 @@ class InspectionTools:
                  evidence: EvidenceStore, config: Config):
         self.repository, self.graph, self.evidence, self.config = repository, graph, evidence, config
 
-    def available(self) -> dict:
-        names = ["repository_status", "read_file", "search_source"]
-        if self.graph is not None:
-            names += ["find_symbols", "describe_symbol", "get_neighbors", "find_path", "read_symbol_source"]
-        return {name: getattr(self, name) for name in names}
+    # Agent infrastructure: these methods are not exposed to the LLM.
+    def available(self) -> dict[str, Callable]:
+        return available_tools(self, has_graph=self.graph is not None)
 
     def execute(self, name: str, arguments: dict) -> dict:
         """Validate invocation and bound responses before they reach the model."""
@@ -39,6 +40,7 @@ class InspectionTools:
                           truncated=True, limitations=["No evidence from this oversized response was delivered."])
         return output
 
+    # Internal helpers
     def _store(self) -> GraphStore:
         if self.graph is None:
             raise NotImplementedError("Graph tools are disabled in source-only mode")
@@ -73,6 +75,15 @@ class InspectionTools:
         return result(status, data=data, evidence_ids=evidence_ids, revision=store.revision,
                       truncated=data.get("truncated", False), limitations=notes)
 
+    def _source_result(self, path: str, raw: bytes, content: str, start: int, end: int,
+                       truncated: bool = False, extra: dict | None = None) -> dict:
+        record = self.repository.source_record(path, raw, start, end, content)
+        eid = self.evidence.add(record)
+        return result(data=record | (extra or {}), evidence_ids=[eid], revision=record["revision"],
+                      truncated=truncated, limitations=["Source is the current working-tree file, identified by its content hash."])
+
+    # LLM-callable tools: each marker declares availability requirements.
+    @llm_tool()
     def repository_status(self) -> dict:
         """Report current checkout identity and available graph capabilities and coverage."""
         revision = self.graph.revision if self.graph else None
@@ -83,6 +94,7 @@ class InspectionTools:
         return result(data=status, revision=status["head"], limitations=[
             "A clean checkout and matching revision do not establish complete graph coverage."])
 
+    @llm_tool(requires_graph=True)
     def find_symbols(self, query: str, path_filter: str = "", limit: int = 10) -> dict:
         """Find candidate functions, classes or files. Names can be ambiguous; use returned IDs.
 
@@ -97,11 +109,13 @@ class InspectionTools:
         status = "ambiguous" if data["ambiguous"] else "ok" if data["matches"] else "not_found"
         return self._graph_result(data, status)
 
+    @llm_tool(requires_graph=True)
     def describe_symbol(self, node_id: str) -> dict:
         """Return a graph node's properties and source location by exact node ID."""
         text(node_id, "node_id")
         return self._graph_result({"nodes": [self._store().describe(node_id)]})
 
+    @llm_tool(requires_graph=True)
     def get_neighbors(self, node_id: str, relations: list[str] | None = None,
                       direction: str = "out", depth: int = 1, limit: int = 30) -> dict:
         """Explore typed graph relationships using bounded BFS; source/target direction is preserved.
@@ -121,6 +135,7 @@ class InspectionTools:
         data = retrieval.neighborhood(self._store(), node_id, allowed, direction, depth, limit)
         return self._graph_result(data, limitations=["Results are limited to the requested hop depth and relationship types."])
 
+    @llm_tool(requires_graph=True)
     def find_path(self, source_id: str, target_id: str, relations: list[str], max_hops: int = 6) -> dict:
         """Find a directed shortest path through explicitly selected relationship types.
 
@@ -138,13 +153,7 @@ class InspectionTools:
             "A structural path is not a runtime execution trace.",
             "No path means none found within these relationships and bounds, not proof of no dependency."])
 
-    def _source_result(self, path: str, raw: bytes, content: str, start: int, end: int,
-                       truncated: bool = False, extra: dict | None = None) -> dict:
-        record = self.repository.source_record(path, raw, start, end, content)
-        eid = self.evidence.add(record)
-        return result(data=record | (extra or {}), evidence_ids=[eid], revision=record["revision"],
-                      truncated=truncated, limitations=["Source is the current working-tree file, identified by its content hash."])
-
+    @llm_tool()
     def read_file(self, path: str, start_line: int = 1, end_line: int = 120) -> dict:
         """Read a bounded UTF-8 source range from the current checkout, not from the graph snapshot.
 
@@ -164,6 +173,7 @@ class InspectionTools:
         return self._source_result(path, raw, "".join(lines[start_line - 1:actual_end]), start_line, actual_end,
                                    extra={"total_lines": len(lines)})
 
+    @llm_tool(requires_graph=True)
     def read_symbol_source(self, node_id: str) -> dict:
         """Read the exact graph source span only if the checkout and file match the graph revision.
 
@@ -195,6 +205,7 @@ class InspectionTools:
         return self._source_result(path, raw, content, start_line, end_line, truncated,
                                    {"node_id": node_id, "graph_revision": store.revision})
 
+    @llm_tool()
     def search_source(self, query: str, path_filter: str = "", limit: int = 20) -> dict:
         """Search literal text in current UTF-8 files, excluding build/cache directories.
 

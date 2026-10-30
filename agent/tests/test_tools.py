@@ -1,7 +1,10 @@
 from dataclasses import replace
+import inspect
 import unittest
 
 from .support import Workspace
+from agent.tool_registry import llm_tool
+from agent.tools import InspectionTools
 
 
 class ToolsTests(unittest.TestCase):
@@ -9,6 +12,38 @@ class ToolsTests(unittest.TestCase):
         self.workspace = Workspace()
         self.addCleanup(self.workspace.close)
         self.tools = self.workspace.tools()
+
+    def test_only_marked_tools_are_exposed(self):
+        self.assertEqual(set(self.tools.available()), {
+            "repository_status", "read_file", "search_source", "find_symbols",
+            "describe_symbol", "get_neighbors", "find_path", "read_symbol_source",
+        })
+        self.assertEqual(set(self.workspace.tools(graph=False).available()), {
+            "repository_status", "read_file", "search_source",
+        })
+        for name in ("execute", "available", "_store", "_source_result"):
+            self.assertEqual(self.tools.execute(name, {})["status"], "error")
+
+    def test_markers_preserve_signatures_and_support_inheritance(self):
+        class ExtendedTools(InspectionTools):
+            @llm_tool()
+            def extra(self, value: str = "default") -> dict:
+                """An additional tool."""
+                return {"value": value}
+
+            # An unmarked override must not inherit exposure accidentally.
+            def read_file(self):
+                pass
+
+        extended = ExtendedTools(self.tools.repository, self.tools.graph,
+                                 self.tools.evidence, self.tools.config)
+        available = extended.available()
+        self.assertIn("repository_status", available)
+        self.assertNotIn("read_file", available)
+        self.assertEqual(available["extra"](), {"value": "default"})
+        self.assertEqual(available["extra"].__doc__, "An additional tool.")
+        self.assertEqual(inspect.signature(available["extra"]).parameters["value"].default,
+                         "default")
 
     def test_matching_symbol_source_and_dirty_file(self):
         output = self.tools.execute("read_symbol_source", {"node_id": "function:helpers.cpp"})

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    model: str = "qwen3:4b-instruct-16k"
+    model: str = "qwen3:8b-q4_K_M"
     max_tool_rounds: int = 8
     max_calls_per_round: int = 8
     max_result_chars: int = 24000

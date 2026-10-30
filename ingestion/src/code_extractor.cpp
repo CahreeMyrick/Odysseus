@@ -78,14 +78,13 @@ class Extractor {
 public:
     explicit Extractor(const std::string& source) : source_(source) {}
 
+    # traverses the parsd tree and fills the code::FileModel schema
     code::FileModel run(TSNode root, CodeLanguage language) {
         model_.schema_version = 2;
-        model_.parser = {"tree-sitter", ODYSSEUS_TS_VERSION,
-            language == CodeLanguage::C ? "c" : "cpp",
-            language == CodeLanguage::C ? ODYSSEUS_TS_C_VERSION : ODYSSEUS_TS_CPP_VERSION,
-            "odysseus-code-v2"};
+        model_.parser = {"tree-sitter", ODYSSEUS_TS_VERSION, language == CodeLanguage::C ? "c" : "cpp", language == CodeLanguage::C ? ODYSSEUS_TS_C_VERSION : ODYSSEUS_TS_CPP_VERSION, "odysseus-code-v2"};
         model_.parse_status = ts_node_has_error(root) ? "partial" : "complete";
         std::vector<Pending> pending{{root, {}}};
+
         // Iterative traversal avoids a C++ stack overflow on deeply nested input.
         while (!pending.empty()) {
             auto current = std::move(pending.back());
@@ -205,17 +204,31 @@ private:
 } // namespace
 
 code::FileModel CodeExtractor::extract(const std::string& source_text, CodeLanguage language) {
-    if (source_text.size() > std::numeric_limits<uint32_t>::max())
+    if (source_text.size() > std::numeric_limits<uint32_t>::max()) {
         throw std::length_error("Source exceeds Tree-sitter's byte-offset limit");
+    }
+
+    // instantiate parser
     std::unique_ptr<TSParser, decltype(&ts_parser_delete)> parser(ts_parser_new(), ts_parser_delete);
-    if (!parser) throw std::runtime_error("Cannot allocate Tree-sitter parser");
+
+    if (!parser) {
+        throw std::runtime_error("Cannot allocate Tree-sitter parser");
+    }
+
+    // specific language
     const auto grammar = language == CodeLanguage::C ? tree_sitter_c() : tree_sitter_cpp();
-    if (!ts_parser_set_language(parser.get(), grammar))
+
+    if (!ts_parser_set_language(parser.get(), grammar)) {
         throw std::runtime_error("Incompatible Tree-sitter grammar ABI");
-    std::unique_ptr<TSTree, decltype(&ts_tree_delete)> tree(
-        ts_parser_parse_string(parser.get(), nullptr, source_text.data(), static_cast<uint32_t>(source_text.size())),
-        ts_tree_delete);
-    if (!tree) throw std::runtime_error("Tree-sitter could not parse source");
+    }
+
+    // execute parsing
+    // ts_parser_parse_string peforms the parsing, it returns a TSTree* which we wrap in a unique_ptr for automatic cleanup
+    std::unique_ptr<TSTree, decltype(&ts_tree_delete)> tree(ts_parser_parse_string(parser.get(), nullptr, source_text.data(), static_cast<uint32_t>(source_text.size())), ts_tree_delete);
+
+    if (!tree) {
+        throw std::runtime_error("Tree-sitter could not parse source");
+    }
     return Extractor(source_text).run(ts_tree_root_node(tree.get()), language);
 }
 } // namespace odysseus::ingestion
