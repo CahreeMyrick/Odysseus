@@ -1,0 +1,233 @@
+{
+  "score": {
+    "scenario": "nonrefundable",
+    "repeat": 1,
+    "state_ok": false,
+    "policy_ok": true,
+    "response_ok": true,
+    "termination_ok": false,
+    "passed": false,
+    "violations": [],
+    "termination": "error",
+    "error": "ValidationError: 1 validation error for InterpretedQuery\n  Value error, Operation target must reference a Reservation [type=value_error, input_value={'goal': 'cancel_reservat...6'}], 'constraints': []}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error"
+  },
+  "report": {
+    "initial": {
+      "ABC123": {
+        "reservation_id": "ABC123",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 48
+      },
+      "DEF456": {
+        "reservation_id": "DEF456",
+        "status": "confirmed",
+        "refundable": false,
+        "hours_until_departure": 48
+      },
+      "GHI789": {
+        "reservation_id": "GHI789",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 12
+      }
+    },
+    "final": {
+      "ABC123": {
+        "reservation_id": "ABC123",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 48
+      },
+      "DEF456": {
+        "reservation_id": "DEF456",
+        "status": "confirmed",
+        "refundable": false,
+        "hours_until_departure": 48
+      },
+      "GHI789": {
+        "reservation_id": "GHI789",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 12
+      }
+    },
+    "state_success": false,
+    "events": [
+      {
+        "kind": "customer_turn",
+        "message": "I would like to cancel my reservation DEF456.",
+        "done": false
+      },
+      {
+        "kind": "policy",
+        "interpreted_query": {
+          "goal": "cancel_reservation",
+          "operation": {
+            "intent": "execute",
+            "action": "cancel_reservation",
+            "target": "reservation_id"
+          },
+          "entities": [
+            {
+              "alias": "reservation_id",
+              "type": "Reservation",
+              "identifier": "DEF456"
+            }
+          ],
+          "constraints": [],
+          "clarifications": []
+        },
+        "context": {
+          "operation": "cancel_reservation",
+          "action_node": "CancelReservation",
+          "target_alias": "reservation_id",
+          "conditions": [
+            {
+              "node_id": "DepartureBeyond24Hours",
+              "properties": {
+                "type": "Condition",
+                "description": "Departure is more than 24 hours away",
+                "attribute": "HoursUntilDeparture",
+                "operator": ">",
+                "value": 24
+              },
+              "checked_attributes": [
+                "HoursUntilDeparture"
+              ]
+            },
+            {
+              "node_id": "Exists",
+              "properties": {
+                "type": "Condition",
+                "description": "Reservation exists",
+                "predicate": "exists(reservation_id)"
+              },
+              "checked_attributes": [
+                "ReservationID"
+              ]
+            },
+            {
+              "node_id": "HasAuthorization",
+              "properties": {
+                "type": "Condition",
+                "description": "Passenger explicitly confirmed this cancellation",
+                "predicate": "explicit_confirmation(reservation_id)"
+              },
+              "checked_attributes": [
+                "ReservationID"
+              ]
+            },
+            {
+              "node_id": "IsConfirmed",
+              "properties": {
+                "type": "Condition",
+                "description": "Reservation is confirmed",
+                "attribute": "ReservationStatus",
+                "operator": "==",
+                "value": "confirmed"
+              },
+              "checked_attributes": [
+                "ReservationStatus"
+              ]
+            },
+            {
+              "node_id": "IsRefundable",
+              "properties": {
+                "type": "Condition",
+                "description": "Reservation is refundable",
+                "attribute": "Refundable",
+                "operator": "==",
+                "value": true
+              },
+              "checked_attributes": [
+                "Refundable"
+              ]
+            }
+          ],
+          "source_references": [
+            "CancelReservation",
+            "DepartureBeyond24Hours",
+            "Exists",
+            "HasAuthorization",
+            "HoursUntilDeparture",
+            "IsConfirmed",
+            "IsRefundable",
+            "Refundable",
+            "ReservationID",
+            "ReservationStatus"
+          ]
+        }
+      },
+      {
+        "kind": "lookup",
+        "reservation_id": "DEF456",
+        "result": {
+          "success": true,
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 48
+        }
+      },
+      {
+        "kind": "customer_turn",
+        "message": "Yes, I would still like to proceed with the cancellation of DEF456.",
+        "done": false
+      }
+    ],
+    "transcript": [
+      {
+        "role": "user",
+        "content": "I would like to cancel my reservation DEF456."
+      },
+      {
+        "role": "assistant",
+        "content": "The reservation DEF456 is confirmed and has a departure in 48 hours. However, it is not refundable. Would you still like to proceed with the cancellation?"
+      },
+      {
+        "role": "user",
+        "content": "Yes, I would still like to proceed with the cancellation of DEF456."
+      }
+    ],
+    "termination": "error",
+    "error": "ValidationError: 1 validation error for InterpretedQuery\n  Value error, Operation target must reference a Reservation [type=value_error, input_value={'goal': 'cancel_reservat...6'}], 'constraints': []}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.14/v/value_error",
+    "agent_messages": [
+      {
+        "role": "system",
+        "content": "You are an airline customer service agent. Follow the retrieved policy below. Use tools for reservation facts and actions; never invent outcomes. Answer the customer naturally.\n\n{\"interpreted_query\": {\"goal\": \"cancel_reservation\", \"operation\": {\"intent\": \"execute\", \"action\": \"cancel_reservation\", \"target\": \"reservation_id\"}, \"entities\": [{\"alias\": \"reservation_id\", \"type\": \"Reservation\", \"identifier\": \"DEF456\"}], \"constraints\": [], \"clarifications\": []}, \"context\": {\"operation\": \"cancel_reservation\", \"action_node\": \"CancelReservation\", \"target_alias\": \"reservation_id\", \"conditions\": [{\"node_id\": \"DepartureBeyond24Hours\", \"properties\": {\"type\": \"Condition\", \"description\": \"Departure is more than 24 hours away\", \"attribute\": \"HoursUntilDeparture\", \"operator\": \">\", \"value\": 24}, \"checked_attributes\": [\"HoursUntilDeparture\"]}, {\"node_id\": \"Exists\", \"properties\": {\"type\": \"Condition\", \"description\": \"Reservation exists\", \"predicate\": \"exists(reservation_id)\"}, \"checked_attributes\": [\"ReservationID\"]}, {\"node_id\": \"HasAuthorization\", \"properties\": {\"type\": \"Condition\", \"description\": \"Passenger explicitly confirmed this cancellation\", \"predicate\": \"explicit_confirmation(reservation_id)\"}, \"checked_attributes\": [\"ReservationID\"]}, {\"node_id\": \"IsConfirmed\", \"properties\": {\"type\": \"Condition\", \"description\": \"Reservation is confirmed\", \"attribute\": \"ReservationStatus\", \"operator\": \"==\", \"value\": \"confirmed\"}, \"checked_attributes\": [\"ReservationStatus\"]}, {\"node_id\": \"IsRefundable\", \"properties\": {\"type\": \"Condition\", \"description\": \"Reservation is refundable\", \"attribute\": \"Refundable\", \"operator\": \"==\", \"value\": true}, \"checked_attributes\": [\"Refundable\"]}], \"source_references\": [\"CancelReservation\", \"DepartureBeyond24Hours\", \"Exists\", \"HasAuthorization\", \"HoursUntilDeparture\", \"IsConfirmed\", \"IsRefundable\", \"Refundable\", \"ReservationID\", \"ReservationStatus\"]}}"
+      },
+      {
+        "role": "user",
+        "content": "I would like to cancel my reservation DEF456."
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "function": {
+              "name": "get_reservation",
+              "arguments": {
+                "reservation_id": "DEF456"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "tool_name": "get_reservation",
+        "content": "{\"success\": true, \"reservation_id\": \"DEF456\", \"status\": \"confirmed\", \"refundable\": false, \"hours_until_departure\": 48}"
+      },
+      {
+        "role": "assistant",
+        "content": "The reservation DEF456 is confirmed and has a departure in 48 hours. However, it is not refundable. Would you still like to proceed with the cancellation?"
+      },
+      {
+        "role": "user",
+        "content": "Yes, I would still like to proceed with the cancellation of DEF456."
+      }
+    ]
+  }
+}

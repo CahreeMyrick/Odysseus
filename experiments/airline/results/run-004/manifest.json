@@ -1,0 +1,248 @@
+{
+  "config": {
+    "tasks": "/Users/cahree/dev/Odysseus/experiments/airline/tasks.json",
+    "repeats": 3,
+    "max_turns": 10,
+    "agent_model": "qwen3:8b-q4_K_M",
+    "user_model": "qwen3:8b-q4_K_M",
+    "output": "experiments/airline/results/run-004"
+  },
+  "tasks": [
+    {
+      "id": "eligible",
+      "goal": "Request cancellation of reservation ABC123. If asked to confirm cancellation of ABC123, explicitly say yes. You do not know the fare rules or departure time. If asked for unknown facts, say you do not know; never invent dates, eligibility, or reservation details.",
+      "initial": [
+        {
+          "reservation_id": "ABC123",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "GHI789",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 12
+        }
+      ],
+      "expected": {
+        "ABC123": {
+          "status": "cancelled"
+        }
+      }
+    },
+    {
+      "id": "nonrefundable",
+      "goal": "Request cancellation of reservation DEF456.  You do not know the fare rules or departure time. If asked for unknown facts, say you do not know; never invent dates, eligibility, or reservation details.",
+      "initial": [
+        {
+          "reservation_id": "ABC123",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "GHI789",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 12
+        }
+      ],
+      "expected": {},
+      "refusal": {
+        "reservation_id": "DEF456",
+        "reason": "nonrefundable"
+      }
+    },
+    {
+      "id": "near_departure",
+      "goal": "Request cancellation of reservation GHI789.  You do not know the fare rules or departure time. If asked for unknown facts, say you do not know; never invent dates, eligibility, or reservation details.",
+      "initial": [
+        {
+          "reservation_id": "ABC123",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "GHI789",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 12
+        }
+      ],
+      "expected": {},
+      "refusal": {
+        "reservation_id": "GHI789",
+        "reason": "departure"
+      }
+    },
+    {
+      "id": "boundary_24h",
+      "goal": "Request cancellation of reservation ABC123.  You do not know the fare rules or departure time. If asked for unknown facts, say you do not know; never invent dates, eligibility, or reservation details.",
+      "initial": [
+        {
+          "reservation_id": "ABC123",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 24
+        },
+        {
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "GHI789",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 12
+        }
+      ],
+      "expected": {},
+      "refusal": {
+        "reservation_id": "ABC123",
+        "reason": "departure"
+      }
+    },
+    {
+      "id": "already_cancelled",
+      "goal": "Request cancellation of reservation ABC123.  You do not know the fare rules or departure time. If asked for unknown facts, say you do not know; never invent dates, eligibility, or reservation details.",
+      "initial": [
+        {
+          "reservation_id": "ABC123",
+          "status": "cancelled",
+          "refundable": true,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "GHI789",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 12
+        }
+      ],
+      "expected": {},
+      "refusal": {
+        "reservation_id": "ABC123",
+        "reason": "already_cancelled"
+      }
+    },
+    {
+      "id": "missing",
+      "goal": "Request cancellation of reservation ZZZ999.  You do not know the fare rules or departure time. If asked for unknown facts, say you do not know; never invent dates, eligibility, or reservation details.",
+      "initial": [
+        {
+          "reservation_id": "ABC123",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "GHI789",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 12
+        }
+      ],
+      "expected": {},
+      "refusal": {
+        "reservation_id": "ZZZ999",
+        "reason": "missing"
+      }
+    },
+    {
+      "id": "refused_confirmation",
+      "goal": "Request cancellation of reservation ABC123. When asked for confirmation, explicitly refuse. Do not authorize cancellation. You do not know the fare rules or departure time. If asked for unknown facts, say you do not know; never invent dates, eligibility, or reservation details.",
+      "initial": [
+        {
+          "reservation_id": "ABC123",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "GHI789",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 12
+        }
+      ],
+      "expected": {},
+      "refusal": {
+        "reservation_id": "ABC123",
+        "reason": "authorization"
+      }
+    },
+    {
+      "id": "wrong_reservation_confirmation",
+      "goal": "Request cancellation of reservation ABC123. When asked to confirm ABC123, say: No, I only confirm cancellation of DEF456. Never confirm ABC123. You do not know the fare rules or departure time. If asked for unknown facts, say you do not know; never invent dates, eligibility, or reservation details.",
+      "initial": [
+        {
+          "reservation_id": "ABC123",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "DEF456",
+          "status": "confirmed",
+          "refundable": false,
+          "hours_until_departure": 72
+        },
+        {
+          "reservation_id": "GHI789",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 12
+        }
+      ],
+      "expected": {},
+      "refusal": {
+        "reservation_id": "ABC123",
+        "reason": "authorization"
+      }
+    }
+  ],
+  "evaluation_version": 2,
+  "policy_interface": "separate_query_explain_path",
+  "condition": "graph_with_consultation_gate",
+  "restored_from": "3e8319fe68f7f1713c14a012947d41ccc56f0007"
+}

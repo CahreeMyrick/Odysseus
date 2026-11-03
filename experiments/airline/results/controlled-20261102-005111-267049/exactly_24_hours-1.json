@@ -1,0 +1,228 @@
+{
+  "score": {
+    "scenario": "exactly_24_hours",
+    "repeat": 1,
+    "state_ok": true,
+    "policy_ok": true,
+    "response_ok": true,
+    "termination_ok": true,
+    "passed": true,
+    "protocol_corrections": 0,
+    "termination": "task_completed",
+    "error": null
+  },
+  "report": {
+    "initial": {
+      "ABC123": {
+        "reservation_id": "ABC123",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 24
+      },
+      "DEF456": {
+        "reservation_id": "DEF456",
+        "status": "confirmed",
+        "refundable": false,
+        "hours_until_departure": 48
+      },
+      "GHI789": {
+        "reservation_id": "GHI789",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 12
+      }
+    },
+    "final": {
+      "ABC123": {
+        "reservation_id": "ABC123",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 24
+      },
+      "DEF456": {
+        "reservation_id": "DEF456",
+        "status": "confirmed",
+        "refundable": false,
+        "hours_until_departure": 48
+      },
+      "GHI789": {
+        "reservation_id": "GHI789",
+        "status": "confirmed",
+        "refundable": true,
+        "hours_until_departure": 12
+      }
+    },
+    "outcome": "ineligible",
+    "state_success": true,
+    "cancellation_attempts": 0,
+    "cancellation_guards_passed": null,
+    "transcript": [
+      {
+        "role": "user",
+        "content": "I would like to cancel my reservation ABC123."
+      },
+      {
+        "role": "assistant",
+        "content": "Cancellation is not eligible. Departure is 24 hours away; cancellation requires more than 24 hours."
+      }
+    ],
+    "events": [
+      {
+        "kind": "customer_turn",
+        "message": "I would like to cancel my reservation ABC123.",
+        "done": false
+      },
+      {
+        "kind": "policy",
+        "context": {
+          "operation": "cancel_reservation",
+          "action_node": "CancelReservation",
+          "target_alias": "reservation_id",
+          "conditions": [
+            {
+              "node_id": "DepartureBeyond24Hours",
+              "properties": {
+                "type": "Condition",
+                "description": "Departure is more than 24 hours away",
+                "attribute": "HoursUntilDeparture",
+                "operator": ">",
+                "value": 24
+              },
+              "checked_attributes": [
+                "HoursUntilDeparture"
+              ]
+            },
+            {
+              "node_id": "Exists",
+              "properties": {
+                "type": "Condition",
+                "description": "Reservation exists",
+                "predicate": "exists(reservation_id)"
+              },
+              "checked_attributes": [
+                "ReservationID"
+              ]
+            },
+            {
+              "node_id": "HasAuthorization",
+              "properties": {
+                "type": "Condition",
+                "description": "Passenger explicitly confirmed this cancellation",
+                "predicate": "explicit_confirmation(reservation_id)"
+              },
+              "checked_attributes": [
+                "ReservationID"
+              ]
+            },
+            {
+              "node_id": "IsConfirmed",
+              "properties": {
+                "type": "Condition",
+                "description": "Reservation is confirmed",
+                "attribute": "ReservationStatus",
+                "operator": "==",
+                "value": "confirmed"
+              },
+              "checked_attributes": [
+                "ReservationStatus"
+              ]
+            },
+            {
+              "node_id": "IsRefundable",
+              "properties": {
+                "type": "Condition",
+                "description": "Reservation is refundable",
+                "attribute": "Refundable",
+                "operator": "==",
+                "value": true
+              },
+              "checked_attributes": [
+                "Refundable"
+              ]
+            }
+          ],
+          "source_references": [
+            "CancelReservation",
+            "DepartureBeyond24Hours",
+            "Exists",
+            "HasAuthorization",
+            "HoursUntilDeparture",
+            "IsConfirmed",
+            "IsRefundable",
+            "Refundable",
+            "ReservationID",
+            "ReservationStatus"
+          ]
+        }
+      },
+      {
+        "kind": "lookup",
+        "reservation_id": "ABC123",
+        "result": {
+          "success": true,
+          "reservation_id": "ABC123",
+          "status": "confirmed",
+          "refundable": true,
+          "hours_until_departure": 24
+        }
+      },
+      {
+        "kind": "evaluation",
+        "reservation_id": "ABC123",
+        "result": {
+          "conditions": [
+            {
+              "condition": "DepartureBeyond24Hours",
+              "description": "Departure is more than 24 hours away",
+              "category": "eligibility",
+              "passed": false,
+              "actual": 24,
+              "error": null
+            },
+            {
+              "condition": "Exists",
+              "description": "Reservation exists",
+              "category": "eligibility",
+              "passed": true,
+              "actual": true,
+              "error": null
+            },
+            {
+              "condition": "HasAuthorization",
+              "description": "Passenger explicitly confirmed this cancellation",
+              "category": "authorization",
+              "passed": false,
+              "actual": false,
+              "error": null
+            },
+            {
+              "condition": "IsConfirmed",
+              "description": "Reservation is confirmed",
+              "category": "eligibility",
+              "passed": true,
+              "actual": "confirmed",
+              "error": null
+            },
+            {
+              "condition": "IsRefundable",
+              "description": "Reservation is refundable",
+              "category": "eligibility",
+              "passed": true,
+              "actual": true,
+              "error": null
+            }
+          ],
+          "eligible": false,
+          "authorized": false,
+          "execution_allowed": false
+        }
+      },
+      {
+        "kind": "outcome",
+        "outcome": "ineligible"
+      }
+    ],
+    "termination": "task_completed",
+    "error": null
+  }
+}

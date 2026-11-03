@@ -1,0 +1,168 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\title{Does a Tool-Calling Domain Agent Need Knowledge Augmentation?\\
+\large A Pilot Study of Policy Access and Enforcement}
+\author{Cahree Myrick\\University of Maryland, Baltimore County\\Baltimore, MD, USA\\\texttt{cmyrick1@umbc.edu}}
+\date{}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Tool-calling language models can modify external systems, but successful execution does not establish policy compliance. We examine policy access and enforcement in a small airline-cancellation environment using three configurations: full-text policy instructions, mandatory policy knowledge-graph retrieval, and graph retrieval with a deterministic controller. Across six scenarios repeated three times per configuration, the recorded strict success rates were 77.8\%, 27.8\%, and 100\%, respectively. Graph retrieval alone did not improve performance; its failures included premature cancellation, ineligible attempts, and structured-interpretation errors. However, the comparison also changes workflow control, and the automated confirmation checker rejects some semantically valid confirmations in the prose condition. These results support a limited conclusion: structured policy access does not itself ensure compliant action, while deterministic control handled the tested cases reliably. They do not establish that knowledge graphs are necessary or superior to equivalent policy representations.
+\end{abstract}
+
+\section{Introduction}
+Language-model agents combine natural-language interaction with actions in external environments~\cite{yao2023react}. In a stateful service domain, reliability requires more than selecting a valid tool and producing a plausible answer. An agent must distinguish a request for information from permission to act, consult authoritative records, and respect restrictions on state changes.
+
+Airline cancellation provides a compact example. A reservation may be technically cancellable while the customer has not authorized cancellation. Conversely, a customer may request an action that the policy forbids. Correct behavior therefore depends on both domain facts and the interaction leading to execution.
+
+Inspired by the tool--agent--user setting of $\tau$-bench~\cite{yao2024tau}, we compare prose instructions, graph-based policy retrieval, and graph-based retrieval coupled with deterministic control. Our experiment is a custom six-scenario pilot, not an evaluation on the official $\tau$-bench dataset. It asks whether structured policy access improves observed behavior and whether an enforced workflow provides additional protection. Because all three configurations receive policy knowledge, the study does not test augmentation against a knowledge-free agent.
+
+\section{Task and Policy}
+Let $x$ be a request, $s$ the initial reservation state, $y$ the response, and $\tau$ the interaction trace, including tool attempts and confirmations. An agent induces
+\begin{equation}
+M(x,s)=(y,s',\tau).
+\end{equation}
+A correct outcome requires both satisfactory task handling $T$ and compliance with domain policy $C_D$:
+\begin{equation}
+\operatorname{Success}=T(x,s,y,s')\land C_D(x,s,y,s',\tau).
+\end{equation}
+The trace is necessary: identical final states can result from compliant execution, unauthorized execution, or a prohibited attempt blocked by a tool.
+
+The environment supports reservation lookup and cancellation. Its synthetic policy permits cancellation only when the reservation exists, is confirmed, is refundable, and departs strictly more than 24 hours later. The customer must separately confirm cancellation of the identified reservation after a confirmation request; an initial cancellation request is insufficient. Ineligible requests require an explanation, and eligibility questions must leave the state unchanged. These are experimental rules, not a claim about actual airline policies.
+
+The policy graph represents actions, conditions, and attributes. An action connects to its conditions through \texttt{REQUIRES} edges; conditions connect to relevant attributes through \texttt{CHECKS} edges. Cancellation has five requirements: existence, confirmed status, refundability, departure beyond 24 hours, and authorization. The graph is constructed programmatically, rather than extracted automatically from policy text. Reservation facts remain in a separate in-memory store.
+
+\section{Configurations}
+\paragraph{Prose (P).}
+The LLM receives the complete policy document in its system prompt and selects between lookup and cancellation tools. It also generates customer-facing responses. Authorization is recorded for subsequent scoring but is not enforced by a separate execution gate.
+
+\paragraph{Graph retrieval (G).}
+This condition uses the same LLM tool loop as P. Before the model selects tools on a customer turn, a structured interpreter identifies the operation and reservation, and a mandatory retriever supplies graph-derived policy context. Retrieval verifies expected condition coverage and rule structure. This validates the retrieved representation, not whether the proposed action satisfies its conditions. The LLM remains responsible for selecting actions and applying authorization requirements.
+
+\paragraph{Graph with deterministic control (G+C).}
+The LLM interprets the request into a typed schema, after which a deterministic controller retrieves policy, looks up reservation facts, evaluates conditions, requests confirmation when needed, and executes or refuses the action. It generates fixed response templates rather than using an LLM planner for the subsequent workflow. The controller accepts confirmation through a bounded whole-message grammar tied to the pending reservation. Before cancellation, it retrieves policy and reads facts again, then evaluates the execution guard. Missing facts, unsupported predicates, and incompatible values fail closed.
+
+All conditions use the same reservation store, which independently rejects ineligible cancellations. Thus G is only ``without enforcement'' relative to the additional controller: backend eligibility protections remain active in every condition. G+C also changes action selection, response generation, and termination behavior. This is a comparison of systems, not a policy-format-only ablation or an isolated test of adding a validator.
+
+\section{Experimental Protocol}
+The completed comparison contains 54 episodes: six scenarios, three repetitions, and three configurations. Each episode starts with fresh conversation history and reservation state. The default store contains three confirmed reservations: refundable ABC123 departing in 48 hours, nonrefundable DEF456 departing in 48 hours, and refundable GHI789 departing in 12 hours. The boundary scenario changes ABC123's departure to exactly 24 hours; the unknown-reservation scenario requests ZZZ999.
+
+The six scenarios test authorized cancellation, refusal of a nonrefundable reservation, refusal at the 24-hour boundary, a customer declining confirmation, an unknown reservation, and an eligibility-only inquiry. Only the first should change reservation state. Unrelated records must remain unchanged.
+
+The notebook specifies \texttt{qwen3:8b-q4\_K\_M} through Ollama for interpretation, LLM tool selection where applicable, and customer simulation, with \texttt{think=False}. Runs allow at most eight customer turns; the LLM tool loop permits eight tool rounds per turn. The saved configurations do not establish fixed seeds or a complete sampling configuration. Customer messages are generated separately for each episode, so repetitions across conditions are not matched conversations.
+
+\subsection{Scoring}
+We use the shared \texttt{observable-v1} scorer, including rescoring the completed controlled run, rather than comparing its original controller-specific score with baseline scores. Strict success requires all four checks:
+\begin{enumerate}
+\item \textbf{State:} the final state matches the expected state, with no episode error.
+\item \textbf{Policy:} the target was looked up and no cancellation attempt violates lookup, recognized confirmation, eligibility, or target requirements.
+\item \textbf{Response:} the target was looked up and scenario-specific lexical and action checks pass.
+\item \textbf{Termination:} the episode completes or the customer stops without an error.
+\end{enumerate}
+Blocked cancellation attempts still count in policy evaluation. Error episodes fail strict success, even if their stored state remains unchanged. The policy component alone can pass in an error episode and must not be read as successful task completion. Response checks use regular expressions, not semantic adjudication.
+
+For repeated-run consistency, we report the scenario-averaged estimator
+\begin{equation}
+\operatorname{pass}^{k}=\frac{1}{6}\sum_{i=1}^{6}
+\frac{\binom{s_i}{k}}{\binom{n_i}{k}},\qquad n_i=3,
+\end{equation}
+where $s_i$ is the number of strict successes for scenario $i$. This measures success on all $k$ sampled attempts, not success on at least one attempt~\cite{yao2024tau}.
+
+\section{Results}
+\begin{table}[ht]
+\centering
+\caption{Shared-scoring results. Component entries are passing episodes out of 18; repeated-run metrics are percentages.}
+\label{tab:aggregate}
+\begin{tabular}{lrrr}
+\toprule
+Measure & P & G & G+C\\
+\midrule
+Strict success & 14/18 & 5/18 & 18/18\\
+State check & 17/18 & 11/18 & 18/18\\
+Policy check & 14/18 & 9/18 & 18/18\\
+Response check & 17/18 & 12/18 & 18/18\\
+Termination check & 18/18 & 14/18 & 18/18\\
+\midrule
+$\operatorname{pass}^{1}$ & 77.8 & 27.8 & 100.0\\
+$\operatorname{pass}^{2}$ & 72.2 & 22.2 & 100.0\\
+$\operatorname{pass}^{3}$ & 66.7 & 16.7 & 100.0\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Strict successes per scenario, each repeated three times.}
+\label{tab:scenarios}
+\begin{tabular}{lrrr}
+\toprule
+Scenario & P & G & G+C\\
+\midrule
+Eligible cancellation & 0/3 & 0/3 & 3/3\\
+Nonrefundable & 3/3 & 0/3 & 3/3\\
+Exactly 24 hours & 3/3 & 0/3 & 3/3\\
+Declined confirmation & 3/3 & 0/3 & 3/3\\
+Unknown reservation & 3/3 & 3/3 & 3/3\\
+Eligibility only & 2/3 & 2/3 & 3/3\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+G+C passed all observed episodes, while G scored below P (Tables~\ref{tab:aggregate} and~\ref{tab:scenarios}). For scale only, nominal 95\% Wilson intervals for the pooled strict-success proportions are 54.8--91.0\% for P, 12.5--50.9\% for G, and 82.4--100.0\% for G+C. These binomial intervals assume independent trials and do not account for clustering by scenario or shared simulator behavior; they are not evidence of population-level significance.
+
+\paragraph{Action attempts and state changes.}
+P made four cancellation attempts, all successful in the store and all flagged as lacking recognized confirmation. Three occurred in eligible-cancellation episodes; one changed state during an eligibility-only episode. G made nine attempts: six succeeded, and three at the 24-hour boundary were rejected by the store. All nine were flagged for confirmation, and the three rejected attempts were additionally flagged as ineligible. G+C made three cancellation attempts, all authorized under its grammar and successful. No condition was flagged for a wrong target or cancellation without prior lookup.
+
+\paragraph{Interpretation and workflow failures.}
+G terminated with structured-query validation errors in all three nonrefundable episodes and one declined-confirmation episode. In the former, the agent acknowledged nonrefundability but still invited cancellation; subsequent user messages triggered interpretation failures. In the other two declined-confirmation episodes, G cancelled on the initial request without giving the customer an opportunity to decline. It likewise cancelled immediately in all three eligible-cancellation episodes. These traces demonstrate failures to enforce a separate confirmation step despite policy retrieval.
+
+\paragraph{Confirmation measurement limits.}
+The prose results require a different interpretation. All three eligible-cancellation transcripts contain a confirmation question followed by an affirmative response. Nevertheless, the checker requires particular wording in the question and a narrow whole-message response grammar. For example, ``Yes, I would like to proceed with the cancellation of my reservation ABC123'' is rejected. Consequently, the three recorded failures do not establish absence of meaningful consent. The controller's templates and accepted grammar align directly with this checker, giving G+C a measurement advantage. We retain the recorded scores rather than silently replacing them with an informal semantic rescore.
+
+The eligibility-only prose failure also includes simulator drift: the customer eventually requests cancellation despite instructions to ask only about eligibility. G's corresponding failure follows the ambiguous question ``Can I cancel the reservation ABC123?'' Thus these episodes expose interaction and simulation limitations as well as agent behavior.
+
+\section{Discussion and Limitations}
+The clearest finding is that delivering structured rules does not guarantee their application. G received mandatory graph context yet made premature cancellations and attempted actions the store rejected. Backend checks preserved state at the departure boundary, illustrating why final-state accuracy and attempted-action compliance should be measured separately.
+
+G+C successfully handled the tested interactions by placing eligibility checks, confirmation, and execution order under deterministic control. This supports the feasibility of a constrained workflow for a narrow task. It does not identify a causal benefit unique to knowledge graphs: equivalent rules could be represented in code, decision tables, or another structured format. A prose-plus-controller condition is absent, and the tested controller replaces substantial LLM behavior rather than merely checking a proposed plan.
+
+Several limits constrain generalization. The suite contains six hand-authored scenarios, one model configuration, and three repetitions per scenario. It covers cancellation and lookup, not rebooking, payments, identity verification, or competing updates to shared state. Authorization here means conversational confirmation, not authentication of the reservation owner. The graph and expected-condition checks are manually specified. Their correctness and completeness remain assumptions, and the experiment does not test adversarial graph changes or production concurrency.
+
+Measurement is also coupled to implementation. Fixed controller responses fit lexical scoring naturally, while valid free-form confirmations can fail. Customer simulation sometimes departs from scenario goals, and termination heuristics differ across workflows. Accordingly, the observed ranking should be treated as a diagnostic result for these implementations. A stronger study would hold dialogue and execution control constant while varying policy representation, add a prose-plus-validator condition, use an independently validated consent evaluator, and test more scenarios and models with controlled customer behavior.
+
+\section{Conclusion}
+In this pilot, mandatory policy-graph retrieval alone did not improve recorded success over full-text instructions. Graph retrieval with deterministic control passed all 18 tested episodes, but workflow differences and confirmation-scoring bias limit the comparison. The evidence supports separating access to policy knowledge from enforcement of action requirements. It does not establish that a tool-calling domain agent needs a knowledge graph, nor that retrieval by itself makes an agent reliable.
+
+\appendix
+\section{Result Provenance}
+The tables derive from saved episodes under \path{experiments/airline/results/}, using the following completed runs:
+\begin{itemize}
+\item P: \path{prose-20261102-010802-373571}
+\item G: \path{graph-no-enforcement-20261102-011500-680647}
+\item G+C: \path{controlled-20261102-005111-267049}
+\end{itemize}
+The G directory's \path{comparison.json} records the shared-scoring comparison. Relevant implementations are \path{prose_baseline.py}, \path{graph_baseline.py}, \path{notebook_workflow.py}, \path{notebook_scenarios.py}, and the interpretation/retrieval cells in \path{notebook.ipynb}, all under \path{experiments/airline/}. The controlled run's configuration records the user model; its interpreter model is specified in the notebook rather than independently captured in that run's configuration.
+
+An earlier incomplete controlled run, \path{controlled-20261102-004524-518890}, contains 13 episodes with three original passes and ten validation-error failures. It is excluded from the completed comparison and disclosed as a development run, not pooled with the later run. Legacy benchmark and smoke-test directories use different protocols and are also excluded. The saved artifacts do not provide a complete immutable code-and-model snapshot, limiting exact historical reproduction. No new model episodes were generated for this analysis.
+
+\begin{thebibliography}{9}
+\bibitem{yao2023react}
+Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao.
+ReAct: Synergizing Reasoning and Acting in Language Models.
+\emph{International Conference on Learning Representations}, 2023.
+\url{https://arxiv.org/abs/2210.03629}.
+
+\bibitem{yao2024tau}
+Shunyu Yao, Noah Shinn, Pedram Razavi, and Karthik Narasimhan.
+$\tau$-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains.
+\emph{arXiv preprint arXiv:2406.12045}, 2024.
+\url{https://arxiv.org/abs/2406.12045}.
+\end{thebibliography}
+\end{document}

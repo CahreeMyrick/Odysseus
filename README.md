@@ -7,3 +7,6 @@ and a local checkout for read-only, evidence-backed investigation. Run
 def main():
     pass
 ```
+
+The restored [airline policy benchmark](experiments/airline/README.md) runs independently
+with task-specific evaluation and repeated-run pass^k summaries.

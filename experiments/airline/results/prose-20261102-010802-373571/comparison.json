@@ -1,0 +1,196 @@
+{
+  "scorer": "observable-v1",
+  "graph_source": "/Users/cahree/dev/Odysseus/experiments/airline/results/controlled-20261102-005111-267049",
+  "graph_metrics": {
+    "pass^1": 1.0,
+    "pass^2": 1.0,
+    "pass^3": 1.0
+  },
+  "prose_metrics": {
+    "pass^1": 0.7777777777777778,
+    "pass^2": 0.7222222222222222,
+    "pass^3": 0.6666666666666666
+  },
+  "graph_rescored_rows": [
+    {
+      "scenario": "eligible",
+      "repeat": 1,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "eligible",
+      "repeat": 2,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "eligible",
+      "repeat": 3,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "nonrefundable",
+      "repeat": 1,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "nonrefundable",
+      "repeat": 2,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "nonrefundable",
+      "repeat": 3,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "exactly_24_hours",
+      "repeat": 1,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "exactly_24_hours",
+      "repeat": 2,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "exactly_24_hours",
+      "repeat": 3,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "declined",
+      "repeat": 1,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "declined",
+      "repeat": 2,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "declined",
+      "repeat": 3,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "unknown",
+      "repeat": 1,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "unknown",
+      "repeat": 2,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "unknown",
+      "repeat": 3,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "eligibility_only",
+      "repeat": 1,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "eligibility_only",
+      "repeat": 2,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    },
+    {
+      "scenario": "eligibility_only",
+      "repeat": 3,
+      "state_ok": true,
+      "policy_ok": true,
+      "response_ok": true,
+      "termination_ok": true,
+      "passed": true,
+      "violations": []
+    }
+  ]
+}
