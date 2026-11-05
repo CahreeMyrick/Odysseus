@@ -32,5 +32,5 @@ variables. Their default skipped status is not evidence of integration coverage.
 
 Describe the problem, resulting behavior, and validation in pull requests. Preserve
 schema compatibility or document migration requirements. Do not introduce unresolved
-call-graph or answer-quality claims. Keep experiments outside the maintained package.
+call-graph or answer-quality claims.
 Never commit credentials, private repository exports, or generated traces.

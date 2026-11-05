@@ -11,7 +11,3 @@ CMake downloads and builds these MIT-licensed upstream projects:
 Archive hashes are pinned in `ingestion/cmake/TreeSitter.cmake`. Upstream license
 files remain in the downloaded source trees. Binary redistribution must retain
 their applicable notices. Other dependencies retain their respective licenses.
-
-The historical airline experiments use a different policy/evaluation domain and
-are not part of the installed inspection package. See their documentation and the
-separate airline project's provenance notices before reusing those artifacts.

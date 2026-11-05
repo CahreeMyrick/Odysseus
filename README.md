@@ -52,7 +52,6 @@ Local checkout + graph → inspection tools → LLM answer + evidence references
 | C++ ingestion and optional indexing | `ingestion/` |
 | Graph and model contracts | `schemas/` |
 | Python regression tests | `tests/` |
-| Historical research, excluded from the package | `experiments/` |
 
 ## Scope
 
