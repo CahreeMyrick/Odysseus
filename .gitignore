@@ -62,12 +62,23 @@ CMakeUserPresets.json
 .DS_Store
 ._*
 
-# Local documentation (keep the development plan)
-/docs/*
-!/docs/devlog.md
-!/docs/manifesto.md
 
 # processed artifacts
 /github_artifacts
 /exports
 /agent/docs
+
+# Archived local work and generated research output
+.local-archive/
+.ipynb_checkpoints/
+/agent/airline_policy_v4/
+/agent/airline_revision/
+/runs/
+
+/docs/*
+!/docs/devlog.md
+!/docs/manifesto.md
+!/docs/architecture.md
+!/docs/benchmark.md
+!/docs/ingestion.md
+!/docs/inspection.md

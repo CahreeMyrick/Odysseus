@@ -1,0 +1,35 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install ${{ matrix.python }}
+      - run: uv sync --locked --python ${{ matrix.python }}
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run pytest
+      - run: uv build
+      - name: Installed wheel smoke test
+        run: |
+          uv venv /tmp/odysseus-wheel --python ${{ matrix.python }}
+          uv pip install --python /tmp/odysseus-wheel/bin/python dist/*.whl pytest
+          cd /tmp
+          /tmp/odysseus-wheel/bin/odysseus-demo --output /tmp/odysseus-fixture
+          /tmp/odysseus-wheel/bin/odysseus-inspect --repo /tmp/odysseus-fixture/repo --graph /tmp/odysseus-fixture/graph.json --inspect-only
+          /tmp/odysseus-wheel/bin/python -m pytest "$GITHUB_WORKSPACE/tests"
+  cpp:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y cmake g++ nlohmann-json3-dev libpq-dev libcurl4-openssl-dev
+      - run: cmake -S ingestion -B build/ci -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+      - run: cmake --build build/ci -j 2
+      - run: ctest --test-dir build/ci --output-on-failure

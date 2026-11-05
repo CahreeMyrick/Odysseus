@@ -1,17 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
 [project]
-name = "odysseus"
+name = "odysseus-code-inspector"
 version = "0.1.0"
-description = "Add your description here"
+description = "Read-only codebase inspection with source-linked knowledge graphs"
 readme = "README.md"
-authors = [
-    { name = "Cahree", email = "cmyrick1@umbc.edu" }
-]
 requires-python = ">=3.12"
-dependencies = [
-    "ipython>=9.17.1",
-    "jupyter>=1.1.1",
-    "lab>=8.10",
-    "matplotlib>=3.11.2",
-    "networkx>=3.7",
-    "ollama>=0.6.3",
-]
+license = "MIT"
+authors = [{ name = "Cahree Myrick" }]
+dependencies = ["networkx>=3.4,<4", "ollama>=0.6.3,<1", "httpx>=0.27,<1"]
+
+[project.scripts]
+odysseus-inspect = "odysseus_agent.__main__:main"
+odysseus-demo = "odysseus_agent.benchmarks.prepare:main"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1", "build>=1.2,<2"]
+research = ["ipython>=9", "jupyter>=1", "matplotlib>=3.9", "jsonschema>=4.23,<5"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/odysseus_agent"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml", "uv.lock"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+include = ["src/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

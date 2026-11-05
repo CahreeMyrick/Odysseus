@@ -78,7 +78,7 @@ class Extractor {
 public:
     explicit Extractor(const std::string& source) : source_(source) {}
 
-    # traverses the parsd tree and fills the code::FileModel schema
+    // Traverse the parsed tree to populate the code::FileModel.
     code::FileModel run(TSNode root, CodeLanguage language) {
         model_.schema_version = 2;
         model_.parser = {"tree-sitter", ODYSSEUS_TS_VERSION, language == CodeLanguage::C ? "c" : "cpp", language == CodeLanguage::C ? ODYSSEUS_TS_C_VERSION : ODYSSEUS_TS_CPP_VERSION, "odysseus-code-v2"};
