@@ -32,4 +32,23 @@ I changed the name of the `build_application` method in the `IngestionApplicatio
 
 Details:
 
-Refractoring / Redesingning `__main__.py` to be simpler and more sensible. 
+Refractoring / Redesingning `__main__.py` to be simpler and more sensible.
+
+### DEV-0004
+
+- **Author:** Cahree
+- **Timestamp:** 2026-11-06 2:00 PM
+- **Type:** CHANGE
+- **Status:** IDEA
+- **Components:** N/A
+
+Details:
+
+We should use architectural and low-level design patterns to build our system components. We should
+use Robert C Martins *Clean Architecture* and Eric/Elisabeth Freemans *Head First Design Patterns*.
+This way:
+
+1. We can have a clear and static model of the system.
+2. We can reduce architectural drift as the system evolves.
+3. We can maxmize collaborative *bandwidth* and *fidelity* both with **each other** and with **AI coding agents** by having a common model of the system
+and supporting resources that we can refer.
