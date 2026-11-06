@@ -13,7 +13,7 @@ from .repository import Repository
 from .runtime import InspectionAgent, OllamaClient
 from .tools import InspectionTools
 from .tracing import save_report
-
+from .chat import chat
 
 def parser() -> argparse.ArgumentParser:
     cli = argparse.ArgumentParser(description="Read-only codebase inspection agent")
@@ -46,83 +46,26 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     cli = parser()
     args = cli.parse_args(argv)
-    if not args.source_only and not args.graph:
-        cli.error("--graph is required unless --source-only is selected")
-    if args.compare and (not args.benchmark or not args.graph or args.source_only):
-        cli.error("--compare requires --benchmark and --graph, without --source-only")
-    if args.trace and args.trace.exists():
-        cli.error("Trace output already exists; choose a new path")
-    try:
-        config = Config(model=args.model, max_tool_rounds=args.max_tool_rounds)
-        repository = Repository(args.repo, config)
-        graph = None if args.source_only else GraphStore(args.graph, args.revision, args.source_uri)
-        if args.inspect_only:
-            print(
-                json.dumps(
-                    InspectionTools(repository, graph, EvidenceStore(), config).repository_status(),
-                    indent=2,
-                )
-            )
-            return 0
-        tasks = validate_tasks(json.loads(args.benchmark.read_text())) if args.benchmark else None
-        client = OllamaClient()
-
-        def new_agent(use_graph: bool) -> InspectionAgent:
-            return InspectionAgent(
-                client,
-                InspectionTools(repository, graph if use_graph else None, EvidenceStore(), config),
-                config,
-            )
-
-        reports = []
-        if tasks is not None:
-            modes = [False, True] if args.compare else [not args.source_only]
-            for task in tasks:
-                for use_graph in modes:
-                    report = new_agent(use_graph).ask(task["question"])
-                    report["evaluation"] = evaluate(task, report)
-                    reports.append(report)
-                    print(json.dumps(report["evaluation"], indent=2))
-        else:
-            agent = new_agent(not args.source_only)
-            while True:
-                if args.question is not None:
-                    question = args.question
-                else:
-                    try:
-                        question = input("inspect> ").strip()
-                    except EOFError:
-                        break
-                    if question in {"quit", "exit"}:
-                        break
-                    if not question:
-                        continue
-                report = agent.ask(question)
-                reports.append(report)
-                print(report["answer"])
-                for reference in report["references"]:
-                    print(reference)
-                audit = report["citation_audit"]
-                if audit["invalid_citations"]:
-                    print(
-                        "Citation check: unknown or undelivered evidence IDs: "
-                        + ", ".join(audit["invalid_citations"]),
-                        file=sys.stderr,
-                    )
-                elif not audit["has_citations"]:
-                    print(
-                        "Citation check: no source citations; answer has not been evidence-validated.",
-                        file=sys.stderr,
-                    )
-                if args.question is not None:
-                    break
-        if args.trace:
-            save_report(args.trace, {"schema_version": 1, "reports": reports})
-        return 0
-    except (ValueError, TypeError, KeyError, OSError, RuntimeError) as exc:
-        print(f"Inspection failed: {exc}", file=sys.stderr)
-        return 1
+    config = Config(model=args.model, max_tool_rounds=args.max_tool_rounds)
+    repository = Repository(args.repo, config)
+    graph = GraphStore(args.graph, args.revision, args.source_uri)
+    client = OllamaClient()
+    tools = InspectionTools(repository, graph, config)
+    agent = InspectionAgent(client, tools, config)
+  
+    run_chat(agent)
+    responses = [] 
+    while True:
+        question = input(">>> ").strip()
+        if question in {"quit", "exit"}:
+            break
+        if not question:
+            continue
+        
+        response = agent.ask(question)
+        responses.append(response)
+        cli.show_response(response)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

@@ -22,5 +22,14 @@ Details:
 Changed `IngestionApplication` to `Ingestion` everywhere as the name is simpler, and renamed files application hpp & cpp to ingestion hpp & cpp. In addition,
 I changed the name of the `build_application` method in the `IngestionApplication` class to `initialize_service`.
 
+### DEV-0003
 
+- **Author:** Cahree
+- **Timestamp:** 2026-11-06 2:32 AM
+- **Type:** CHANGE
+- **Status:** IN-PROGRESS
+- **Components:** Agent Orchestration
 
+Details:
+
+Refractoring / Redesingning `__main__.py` to be simpler and more sensible. 
