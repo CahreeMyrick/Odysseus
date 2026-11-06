@@ -12,6 +12,11 @@ RELATIONS = {
     "CONTAINS": {("Revision", "File"), ("File", "CallSite")},
     "DEFINES": {("File", "Function"), ("File", "Class")},
     "HAS_CALL_SITE": {("Function", "CallSite")},
+    "INFERRED_TARGET": {("CallSite", "Function")},
+    "EXTRACTED_TARGET": {("CallSite", "Function")},
+    "DECLARES": {("File", "Function")},
+    "DECLARATION_OF": {("Function", "Function")},
+    "INCLUDES": {("File", "File")},
 }
 
 
@@ -29,9 +34,10 @@ class GraphStore:
         if (
             not isinstance(data, dict)
             or type(data.get("schema_version")) is not int
-            or data["schema_version"] != 1
+            or data["schema_version"] not in {1, 2, 3, 4}
         ):
-            raise ValueError("Expected graph schema_version 1")
+            raise ValueError("Expected graph schema_version 1, 2, 3 or 4")
+        self.schema_version = data["schema_version"]
         if set(data) != {"schema_version", "nodes", "edges"}:
             raise ValueError("Unexpected graph fields")
         if not isinstance(data["nodes"], list) or not isinstance(data["edges"], list):
@@ -68,11 +74,136 @@ class GraphStore:
                 raise ValueError(f"Invalid relationship: {relation}")
             if not isinstance(edge["properties"], dict):
                 raise ValueError("Edge properties must be an object")
+            props = edge["properties"]
+            if relation in {"DECLARES", "DECLARATION_OF", "INCLUDES"} and self.schema_version < 4:
+                raise ValueError("Declaration relationships require graph v4")
+            if relation == "DECLARES" and nodes[target]["properties"].get("kind") != "declaration":
+                raise ValueError("DECLARES requires a declaration target")
+            if relation == "INCLUDES":
+                if (
+                    props.get("evidence_kind") not in {"EXTRACTED", "INFERRED"}
+                    or props.get("method") not in {"relative_include", "unique_include_suffix"}
+                    or props.get("include_kind") not in {"quoted", "unknown"}
+                    or (
+                        props.get("evidence_kind") == "EXTRACTED"
+                        and (
+                            props.get("method") != "relative_include"
+                            or props.get("include_kind") != "quoted"
+                        )
+                    )
+                ):
+                    raise ValueError("Invalid include association")
+                evidence = props.get("evidence")
+                if (
+                    not isinstance(evidence, list)
+                    or not all(isinstance(nid, str) for nid in evidence)
+                    or set(evidence) != {source, target}
+                ):
+                    raise ValueError("Invalid include evidence")
+                for field in ("raw_include", "resolver_version", "limitations"):
+                    _string(props.get(field), field)
+            if relation == "DECLARATION_OF":
+                if (
+                    nodes[source]["properties"].get("kind") != "declaration"
+                    or nodes[target]["properties"].get("kind") != "function"
+                    or props.get("method") != "exact_sibling_signature"
+                    or not nodes[source]["properties"].get("signature_key")
+                    or any(
+                        nodes[source]["properties"].get(key) != nodes[target]["properties"].get(key)
+                        for key in ("qualified_name", "signature_key")
+                    )
+                ):
+                    raise ValueError("Invalid declaration/definition association")
+                evidence = props.get("evidence")
+                if (
+                    not isinstance(evidence, list)
+                    or not all(isinstance(nid, str) and nid in nodes for nid in evidence)
+                    or source not in evidence
+                    or target not in evidence
+                ):
+                    raise ValueError("Invalid declaration evidence")
+                _string(props.get("resolver_version"), "resolver_version")
+                _string(props.get("limitations"), "limitations")
+            if relation in {"INFERRED_TARGET", "EXTRACTED_TARGET"}:
+                extracted = relation == "EXTRACTED_TARGET"
+                if self.schema_version < (3 if extracted else 2) or props.get("evidence_kind") != (
+                    "EXTRACTED" if extracted else "INFERRED"
+                ):
+                    raise ValueError("Target evidence kind or graph version is incompatible")
+                if props.get("resolution_status") not in (
+                    {"extracted"} if extracted else {"inferred", "ambiguous"}
+                ):
+                    raise ValueError("Invalid target status")
+                if extracted and props.get("method") not in {
+                    "explicit_qualified_name",
+                    "explicit_this_receiver",
+                }:
+                    raise ValueError("Extracted targets require an explicit syntax method")
+                for field in ("method", "resolver_version", "matched_name", "limitations"):
+                    _string(props.get(field), field)
+                evidence = props.get("evidence")
+                if (
+                    not isinstance(evidence, list)
+                    or not all(isinstance(nid, str) and nid in nodes for nid in evidence)
+                    or source not in evidence
+                    or target not in evidence
+                ):
+                    raise ValueError("Invalid target evidence")
+                if (
+                    extracted
+                    and props["method"] == "explicit_this_receiver"
+                    and not any(nodes[nid]["type"] == "Class" for nid in evidence)
+                ):
+                    raise ValueError("Explicit this targets require class evidence")
+            elif (
+                relation != "INCLUDES"
+                and self.schema_version >= 2
+                and props.get("evidence_kind") != "EXTRACTED"
+            ):
+                raise ValueError("Structural edges require EXTRACTED evidence")
             key = (source, target, relation)
             if key in edge_keys:
                 raise ValueError(f"Duplicate relationship: {key}")
             edge_keys.add(key)
             edges.append(edge)
+        # Validate semantic edge ownership across the entire input, before selection
+        # can hide a cross-revision edge or its evidence.
+        node_files = {}
+        file_revisions = {}
+        for edge in edges:
+            if nodes[edge["source"]]["type"] == "File" and edge["type"] != "INCLUDES":
+                if edge["target"] in node_files:
+                    raise ValueError("Symbol belongs to multiple files")
+                node_files[edge["target"]] = edge["source"]
+            if nodes[edge["source"]]["type"] == "Revision":
+                if edge["target"] in file_revisions:
+                    raise ValueError("File belongs to multiple revisions")
+                file_revisions[edge["target"]] = edge["source"]
+        targets = defaultdict(list)
+        for edge in edges:
+            if edge["type"] not in {
+                "INFERRED_TARGET",
+                "EXTRACTED_TARGET",
+                "DECLARATION_OF",
+                "INCLUDES",
+            }:
+                continue
+            if edge["type"] != "INCLUDES":
+                targets[edge["source"]].append(edge)
+            evidence_files = {
+                nid if nodes[nid]["type"] == "File" else node_files.get(nid)
+                for nid in edge["properties"]["evidence"]
+            }
+            revisions = {file_revisions.get(fid) for fid in evidence_files}
+            if None in revisions or len(revisions) != 1:
+                raise ValueError("Targets and evidence must belong to one revision")
+        for matches in targets.values():
+            if any(edge["type"] == "DECLARATION_OF" for edge in matches) and len(matches) != 1:
+                raise ValueError("A declaration must have a unique associated definition")
+            if any(edge["type"] == "EXTRACTED_TARGET" for edge in matches) and len(matches) != 1:
+                raise ValueError(
+                    "An extracted target must be unique, without inferred alternatives"
+                )
         # Validate everything before NetworkX can implicitly create missing endpoints.
         graph = nx.MultiDiGraph()
         for nid in sorted(nodes):
@@ -111,11 +242,15 @@ class GraphStore:
         selected = {repo_id, revision_id}
         file_ids = set(graph.successors(revision_id))
         for fid in file_ids:
-            parents = list(graph.predecessors(fid))
+            parents = [
+                source for source, _, key in graph.in_edges(fid, keys=True) if key == "CONTAINS"
+            ]
             if parents != [revision_id]:
                 raise ValueError("File belongs to multiple revisions")
             selected.add(fid)
-            selected.update(graph.successors(fid))
+            selected.update(
+                target for _, target, key in graph.out_edges(fid, keys=True) if key != "INCLUDES"
+            )
         # Calls must stay within their file; containment determines ownership.
         self.node_files = {}
         self.files = defaultdict(list)
@@ -133,7 +268,9 @@ class GraphStore:
                 raise ValueError(f"File provenance differs from graph revision: {path}")
             self.files[path].append(fid)
             self.node_files[fid] = fid
-            for child in graph.successors(fid):
+            for _, child, relation in graph.out_edges(fid, keys=True):
+                if relation == "INCLUDES":
+                    continue
                 if child in self.node_files:
                     raise ValueError(f"Symbol belongs to multiple files: {child}")
                 self.node_files[child] = fid
@@ -175,7 +312,32 @@ class GraphStore:
             "edges": self.graph.number_of_edges(),
             "files": len(self.files),
             "partial_files": partial,
-            "supported_relations": sorted(RELATIONS),
-            "capabilities": {"resolved_calls": False, "impact_analysis": False},
-            "coverage": "Exported files only; includes, lexical scopes and resolved calls are not represented.",
+            "supported_relations": sorted(
+                r
+                for r in RELATIONS
+                if (r != "INFERRED_TARGET" or self.schema_version >= 2)
+                and (r != "EXTRACTED_TARGET" or self.schema_version >= 3)
+                and (
+                    r not in {"DECLARES", "DECLARATION_OF", "INCLUDES"} or self.schema_version >= 4
+                )
+            ),
+            "capabilities": {
+                "resolved_calls": False,
+                "inferred_call_targets": self.schema_version >= 2,
+                "extracted_call_targets": self.schema_version >= 3,
+                "declaration_linking": self.schema_version >= 4,
+                "include_associations": self.schema_version >= 4,
+                "receiver_type_inference": self.schema_version >= 4
+                and any(
+                    self.graph.nodes[fid]["properties"].get("parser", {}).get("extractor_version")
+                    == "odysseus-code-v3"
+                    for ids in self.files.values()
+                    for fid in ids
+                ),
+                "impact_analysis": False,
+            },
+            "coverage": "Exported files only. Extracted targets are explicit syntax associations, "
+            "not compiler-verified calls. Inferred targets are candidates; "
+            "scoped receiver bindings and syntactic declaration links are supported in v4; "
+            "overload selection, preprocessing, aliases and runtime dispatch are not checked.",
         }

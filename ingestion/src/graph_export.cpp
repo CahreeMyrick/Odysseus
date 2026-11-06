@@ -1,4 +1,5 @@
 #include "graph_export.hpp"
+#include "call_resolution.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
@@ -41,7 +42,8 @@ class Builder {
             throw std::runtime_error("Conflicting node identity: " + id);
     }
     void edge(const std::string& source, const char* type, const std::string& target) {
-        edges_.emplace(identity(json::array({source, type, target})), graph::Edge{source, type, target});
+        edges_.emplace(identity(json::array({source, type, target})), graph::Edge{source, type, target,
+            {{"evidence_kind", "EXTRACTED"}, {"method", "syntax"}}});
     }
 public:
     void add(const json& record) {
@@ -85,6 +87,10 @@ public:
             properties["parser"] = model.at("parser");
             properties["parse_status"] = model.at("parse_status");
             properties["diagnostics"] = array_field(model, "diagnostics");
+            properties["scopes"] = array_field(model, "scopes");
+            properties["includes"] = array_field(model, "includes");
+            properties["bindings"] = model.value("bindings", json::array());
+            if (!properties["bindings"].is_array()) throw std::runtime_error("Expected bindings array");
         }
         node(file_id, "File", properties);
         edge(repo_id, "HAS_REVISION", rev_id);
@@ -112,6 +118,17 @@ public:
             node(id, "Class", cls);
             edge(file_id, "DEFINES", id);
         }
+        const auto declarations = model.value("declarations", json::array());
+        if (!declarations.is_array()) throw std::runtime_error("Expected declarations array");
+        for (const auto& decl : declarations) {
+            const auto id = symbol_id("Function", string_field(decl, "id"));
+            for (const auto* key : {"name", "qualified_name", "signature_key", "owner_id"})
+                string_field(decl, key, true);
+            if (string_field(decl, "kind") != "declaration") throw std::runtime_error("Invalid declaration kind");
+            source_span(decl);
+            node(id, "Function", decl);
+            edge(file_id, "DECLARES", id);
+        }
         for (const auto& call : array_field(model, "calls")) {
             const auto id = symbol_id("CallSite", string_field(call, "id"));
             const auto caller = string_field(call, "caller_id", true);
@@ -133,6 +150,7 @@ public:
         graph::Graph result;
         for (const auto& entry : nodes_) result.nodes.push_back(entry.second);
         for (const auto& entry : edges_) result.edges.push_back(entry.second);
+        infer_call_targets(result);
         return result;
     }
 };

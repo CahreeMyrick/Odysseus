@@ -16,7 +16,7 @@ struct Edge {
     json properties = json::object();
 };
 struct Graph {
-    int schema_version = 1;
+    int schema_version = 4;
     std::vector<Node> nodes;
     std::vector<Edge> edges;
 };

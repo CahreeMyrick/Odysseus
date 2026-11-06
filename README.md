@@ -55,8 +55,11 @@ Local checkout + graph → inspection tools → LLM answer + evidence references
 
 ## Scope
 
-- Extraction covers C/C++ syntax and Markdown/text documents. Call targets and
-  includes remain unresolved; impact analysis is not supported.
+- Extraction covers C/C++ syntax and Markdown/text documents. Graph export adds
+  extracted targets for explicit qualified/`this` calls and inferred candidates
+  using scopes and relative include paths, with evidence and ambiguity preserved.
+  Compiler-proven calls and impact analysis
+  are not supported. See [resolution coverage](docs/call-resolution.md).
 - The agent can search and read source but cannot edit files or execute model-selected commands.
 - Citation checks verify evidence IDs and delivery, not whether every claim is supported.
 - Graphs are snapshots and must be regenerated after source changes.

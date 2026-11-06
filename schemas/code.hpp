@@ -46,6 +46,7 @@ struct Include {
     std::size_t line = 0;
     SourceSpan span;
     std::string resolution_status = "unresolved";
+    std::string kind = "unknown";
 };
 
 struct ClassDefinition {
@@ -71,6 +72,17 @@ struct FunctionDefinition {
     std::string id;
     std::string owner_id;
     std::string kind = "function";
+    SourceSpan span;
+    // Syntactic parameter types and member qualifiers, not compiler types.
+    std::string signature_key;
+};
+
+struct TypedBinding {
+    std::string id;
+    std::string name;
+    std::string type_name;
+    std::string owner_id;
+    std::string indirection;
     SourceSpan span;
 };
 
@@ -101,6 +113,8 @@ struct FileModel {
     std::string parse_status = "unparsed";
     std::vector<ParseDiagnostic> diagnostics;
     std::vector<LexicalScope> scopes;
+    std::vector<FunctionDefinition> declarations;
+    std::vector<TypedBinding> bindings;
 };
 
 }

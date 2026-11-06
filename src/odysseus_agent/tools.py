@@ -98,6 +98,25 @@ class InspectionTools:
             evidence_map[eid] = {key: edge[key] for key in ("source", "target", "type")}
         data["evidence_map"] = evidence_map
         notes = list(limitations or [])
+        if any(edge["type"] == "INCLUDES" for edge in data.get("edges", [])):
+            notes.append(
+                "Include associations do not account for build search order or preprocessor conditions."
+            )
+        if any(edge["type"] == "DECLARATION_OF" for edge in data.get("edges", [])):
+            notes.append(
+                "Declaration links match syntactic signatures in the same file or sibling "
+                "header/implementation files; they do not establish compiler identity."
+            )
+        if any(edge["type"] == "EXTRACTED_TARGET" for edge in data.get("edges", [])):
+            notes.append(
+                "Extracted targets associate explicit syntax with a unique exported definition; "
+                "they are not compiler-verified calls or proof of runtime dispatch."
+            )
+        if any(edge["type"] == "INFERRED_TARGET" for edge in data.get("edges", [])):
+            notes.append(
+                "Inferred targets are candidate matches, not proven calls; ambiguous targets "
+                "must not be silently selected. Inspect edge evidence and limitations."
+            )
         partial_paths = set(store.status()["partial_files"])
         if any(
             node.get("path") in partial_paths

@@ -10,7 +10,12 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 1
+      "enum": [
+        1,
+        2,
+        3,
+        4
+      ]
     },
     "nodes": {
       "type": "array",
@@ -73,7 +78,12 @@
             "HAS_REVISION",
             "CONTAINS",
             "DEFINES",
-            "HAS_CALL_SITE"
+            "HAS_CALL_SITE",
+            "INFERRED_TARGET",
+            "EXTRACTED_TARGET",
+            "DECLARES",
+            "DECLARATION_OF",
+            "INCLUDES"
           ]
         },
         "target": {
@@ -83,7 +93,360 @@
         "properties": {
           "type": "object"
         }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "INFERRED_TARGET"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "properties": {
+                "type": "object",
+                "required": [
+                  "evidence_kind",
+                  "resolution_status",
+                  "method",
+                  "resolver_version",
+                  "matched_name",
+                  "evidence",
+                  "limitations"
+                ],
+                "properties": {
+                  "evidence_kind": {
+                    "const": "INFERRED"
+                  },
+                  "resolution_status": {
+                    "enum": [
+                      "inferred",
+                      "ambiguous"
+                    ]
+                  },
+                  "method": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "resolver_version": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "matched_name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "limitations": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "EXTRACTED_TARGET"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "properties": {
+                "type": "object",
+                "required": [
+                  "evidence_kind",
+                  "resolution_status",
+                  "method",
+                  "resolver_version",
+                  "matched_name",
+                  "evidence",
+                  "limitations"
+                ],
+                "properties": {
+                  "evidence_kind": {
+                    "const": "EXTRACTED"
+                  },
+                  "resolution_status": {
+                    "const": "extracted"
+                  },
+                  "method": {
+                    "enum": [
+                      "explicit_qualified_name",
+                      "explicit_this_receiver"
+                    ]
+                  },
+                  "resolver_version": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "matched_name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "limitations": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "DECLARATION_OF"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "properties": {
+                "required": [
+                  "evidence_kind",
+                  "method",
+                  "resolver_version",
+                  "evidence",
+                  "limitations"
+                ],
+                "properties": {
+                  "evidence_kind": {
+                    "const": "EXTRACTED"
+                  },
+                  "method": {
+                    "const": "exact_sibling_signature"
+                  },
+                  "resolver_version": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "limitations": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "INCLUDES"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "properties": {
+                "required": [
+                  "evidence_kind",
+                  "method",
+                  "raw_include",
+                  "include_kind",
+                  "resolver_version",
+                  "evidence",
+                  "limitations",
+                  "span"
+                ],
+                "properties": {
+                  "evidence_kind": {
+                    "enum": [
+                      "EXTRACTED",
+                      "INFERRED"
+                    ]
+                  },
+                  "method": {
+                    "enum": [
+                      "relative_include",
+                      "unique_include_suffix"
+                    ]
+                  },
+                  "include_kind": {
+                    "enum": [
+                      "quoted",
+                      "unknown"
+                    ]
+                  },
+                  "raw_include": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "resolver_version": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "limitations": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "span": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "edges": {
+            "items": {
+              "properties": {
+                "type": {
+                  "not": {
+                    "enum": [
+                      "INFERRED_TARGET",
+                      "EXTRACTED_TARGET"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "edges": {
+            "items": {
+              "if": {
+                "properties": {
+                  "type": {
+                    "not": {
+                      "enum": [
+                        "INFERRED_TARGET",
+                        "INCLUDES"
+                      ]
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "properties": {
+                    "required": [
+                      "evidence_kind"
+                    ],
+                    "properties": {
+                      "evidence_kind": {
+                        "const": "EXTRACTED"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "edges": {
+            "items": {
+              "properties": {
+                "type": {
+                  "not": {
+                    "const": "EXTRACTED_TARGET"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "enum": [
+              1,
+              2,
+              3
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "edges": {
+            "items": {
+              "properties": {
+                "type": {
+                  "not": {
+                    "enum": [
+                      "DECLARES",
+                      "DECLARATION_OF",
+                      "INCLUDES"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
-  }
+  ]
 }

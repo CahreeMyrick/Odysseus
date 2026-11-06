@@ -119,7 +119,7 @@ odysseus graph-export <model-directory> --output <graph.json>
 ```
 
 The converter reads code schema v2 and unversioned document models. It writes
-`schema_version: 1`, a `nodes` array, and an `edges` array, as defined by
+`schema_version: 3`, a `nodes` array, and an `edges` array, as defined by
 [graph.schema.json](../schemas/graph.schema.json).
 
 | Source | Relationship | Target |
@@ -129,11 +129,20 @@ The converter reads code schema v2 and unversioned document models. It writes
 | File | `DEFINES` | Function or Class |
 | File | `CONTAINS` | CallSite |
 | Function | `HAS_CALL_SITE` | CallSite |
+| CallSite | `INFERRED_TARGET` | Function |
+| CallSite | `EXTRACTED_TARGET` | Function |
 
 Node properties preserve file provenance, symbol details, and source locations.
-Code file nodes also retain parser metadata, parse status, and diagnostics.
-Documents become file nodes; includes and lexical scopes are not projected.
-Call sites remain unresolved, so no target-function `CALLS` edges are created.
+Code file nodes also retain parser metadata, parse status, diagnostics, includes,
+and lexical scopes. Documents become file nodes.
+Call sites retain their unresolved syntax status. A separate pass adds inferred
+target candidates and ambiguity, plus extracted associations for explicit qualified
+and `this` calls; no target-function `CALLS` edges are created.
+Structural edges are labeled `EXTRACTED`; candidate edges are `INFERRED` and carry
+method, evidence IDs, resolver version and limitations. Extracted target associations
+carry the same evidence fields with `EXTRACTED` and an explicit syntax method;
+they do not claim compiler verification. Readers retain v1 and v2 support.
+See [call-target inference](call-resolution.md) for coverage and migration details.
 
 IDs are opaque strings scoped by repository, revision, file, and extraction
 identity. Identical records and shared repository/revision nodes are deduplicated;

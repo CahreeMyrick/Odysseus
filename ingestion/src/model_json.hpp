@@ -13,14 +13,15 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(SourceSpan, start_byte, end_byte
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(ParseDiagnostic, kind, message, span)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(LexicalScope, id, kind, name, qualified_name, owner_id, span)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(ParserInfo, name, runtime_version, grammar, grammar_version, extractor_version)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Include, target, line, span, resolution_status)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Include, target, line, span, resolution_status, kind)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(ClassDefinition, name, start_line, end_line, id, qualified_name, owner_id, kind, span)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(FunctionDefinition, name, qualified_name, signature, return_type,
-                                 start_line, end_line, id, owner_id, kind, span)
+                                 start_line, end_line, id, owner_id, kind, span, signature_key)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(TypedBinding, id, name, type_name, owner_id, indirection, span)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(FunctionCall, caller, callee, line, id, caller_id, owner_id,
                                  expression, resolution_status, span)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(FileModel, file, includes, classes, functions, calls,
-                                 schema_version, parser, parse_status, diagnostics, scopes)
+                                 schema_version, parser, parse_status, diagnostics, scopes, declarations, bindings)
 }
 namespace odysseus::document {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Page, number, text)

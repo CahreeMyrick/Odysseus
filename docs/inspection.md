@@ -45,13 +45,17 @@ and an existing output file is never overwritten. The parent directory must exis
 
 ## Boundaries and evidence
 
-- Graph schema v1 is validated before loading into `MultiDiGraph`. Unknown node
+- Graph schemas v1, v2 and v3 are validated before loading into `MultiDiGraph`. Unknown node
   types, invalid relationship endpoints/types, duplicate IDs, and inconsistent
   selected-file provenance are rejected.
 - Only one repository/revision is selected. Symbols are indexed by ID, name,
   qualified name, and path. Same-named symbols produce candidates, not guesses.
 - Available graph relationships are `HAS_REVISION`, `CONTAINS`, `DEFINES`, and
-  `HAS_CALL_SITE`. Resolved calls and impact analysis are explicitly unsupported.
+  `HAS_CALL_SITE`. Graph v2 also supports opt-in `INFERRED_TARGET` traversal, with
+  candidate evidence and ambiguity preserved. Graph v3 adds opt-in `EXTRACTED_TARGET`
+  for explicit qualified/`this` syntax associations. Neither tier proves runtime calls;
+  resolved calls and impact analysis remain unsupported. See
+  [call-target inference](call-resolution.md).
 - Graph records are historical evidence. Source tools read current working-tree
   files and record content hashes. Exact symbol-span reads require the checkout
   HEAD to match the graph commit and the file bytes to match that commit. Otherwise

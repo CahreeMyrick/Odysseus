@@ -82,3 +82,4 @@ CMakeUserPresets.json
 !/docs/benchmark.md
 !/docs/ingestion.md
 !/docs/inspection.md
+!/docs/call-resolution.md

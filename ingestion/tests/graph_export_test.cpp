@@ -16,8 +16,9 @@ template<class F> void fails(F action, const std::string& message) {
     }
     throw std::runtime_error("Expected failure: " + message);
 }
-json fixture(const std::string& path = "src/main.cpp", const std::string& revision = "abc") {
-    auto model = CodeExtractor::extract("struct A {}; int f() { return helper(); }");
+json fixture(const std::string& path = "src/main.cpp", const std::string& revision = "abc",
+             const std::string& source = "struct A {}; int f() { return helper(); }") {
+    auto model = CodeExtractor::extract(source);
     model.file.path = path;
     model.file.provenance.source_id = "https://github.com/example/repo";
     model.file.provenance.snapshot_id = revision;
@@ -26,6 +27,103 @@ json fixture(const std::string& path = "src/main.cpp", const std::string& revisi
 }
 int main() {
     try {
+        auto caller = fixture("src/main.cpp", "abc",
+            "#include \"helpers.hpp\"\nnamespace other { int helper() { return 2; } }\n"
+            "int f() { return helper() + other::helper() + missing(); }");
+        auto header = fixture("src/helpers.hpp", "abc", "int helper() { return 1; }");
+        auto unrelated = fixture("elsewhere.cpp", "abc", "int helper() { return 3; }");
+        auto historical = fixture("src/helpers.hpp", "old", "int helper() { return 4; }");
+        auto inferred = build_graph({caller, header, unrelated, historical});
+        check(inferred.schema_version == 4, "Expected graph v4");
+        int inferred_count = 0;
+        for (const auto& edge : inferred.edges) {
+            if (edge.type != "INFERRED_TARGET") {
+                check(edge.properties.at("evidence_kind") == "EXTRACTED", "Missing explicit evidence");
+                continue;
+            }
+            ++inferred_count;
+            check(edge.properties.at("evidence_kind") == "INFERRED", "Inference presented as fact");
+            check(edge.properties.at("resolution_status") == "inferred", "Unexpected ambiguity");
+            check(edge.target.find("elsewhere.cpp") == std::string::npos &&
+                  edge.target.find("old") == std::string::npos, "Escaped visibility/revision");
+        }
+        check(inferred_count == 1, "Missing cross-file candidate or qualified call not extracted");
+        int explicit_count = 0;
+        for (const auto& edge : inferred.edges)
+            if (edge.type == "EXTRACTED_TARGET") {
+                ++explicit_count;
+                check(edge.properties.at("method") == "explicit_qualified_name" &&
+                      edge.properties.at("matched_name") == "other::helper", "Wrong explicit target");
+            }
+        check(explicit_count == 1, "Missing explicit qualified target");
+        check(json(inferred) == json(build_graph({historical, unrelated, header, caller, caller})),
+              "Inference depends on input order");
+        auto overloaded = fixture("overloads.cpp", "abc",
+            "int h(int x) { return x; } int h(double x) { return 0; } int f() { return h(1); }");
+        int ambiguous = 0;
+        for (const auto& edge : build_graph({overloaded}).edges)
+            if (edge.type == "INFERRED_TARGET") {
+                ++ambiguous;
+                check(edge.properties.at("resolution_status") == "ambiguous", "Guessed overload");
+            }
+        check(ambiguous == 2, "Lost overload candidates");
+        auto scoped = fixture("scoped.cpp", "abc",
+            "int h() { return 0; } namespace n { int h() { return 1; } int f() { return h(); } }");
+        for (const auto& edge : build_graph({scoped}).edges)
+            if (edge.type == "INFERRED_TARGET")
+                check(edge.properties.at("matched_name") == "n::h", "Ignored namespace scope");
+        auto unsupported = fixture("member.cpp", "abc",
+            "struct A { int h() { return 1; } }; int f(A a) { return a.h(); }");
+        for (const auto& node : build_graph({unsupported}).nodes)
+            if (node.type == "CallSite")
+                check(node.properties.at("target_resolution").at("status") == "inferred",
+                      "Typed parameter receiver not inferred");
+        auto partial_candidate = header;
+        partial_candidate["model"]["parse_status"] = "partial";
+        for (const auto& edge : build_graph({caller, partial_candidate}).edges)
+            if (edge.type == "INFERRED_TARGET" || edge.type == "EXTRACTED_TARGET")
+                check(edge.properties.at("matched_name") == "other::helper", "Used partial target");
+        auto members = fixture("members.cpp", "abc",
+            "struct lower { int h() { return 1; } int g(); int f() { return this -> h(); } }; "
+            "struct Other { int h() { return 2; } }; "
+            "int lower::g() { return this->h() + lower::h(); }");
+        int explicit_members = 0;
+        for (const auto& edge : build_graph({members}).edges)
+            if (edge.type == "EXTRACTED_TARGET") {
+                ++explicit_members;
+                check(edge.properties.at("matched_name") == "lower::h", "Receiver collision");
+                check(edge.properties.at("resolution_status") == "extracted", "Wrong explicit status");
+                if (edge.properties.at("method") == "explicit_this_receiver")
+                    check(edge.properties.at("evidence").size() == 5, "Missing receiver evidence");
+            }
+        check(explicit_members == 3, "Missing inline/out-of-line this or lower-case qualified target");
+        auto ambiguous_members = fixture("ambiguous.cpp", "abc",
+            "struct A { static int h(int x) { return x; } static int h(double x) { return 0; } "
+            "int f() { return this->h(1); } }; int f() { return A::h(1); }");
+        int ambiguous_members_count = 0;
+        for (const auto& edge : build_graph({ambiguous_members}).edges) {
+            check(edge.type != "EXTRACTED_TARGET", "Ambiguous overload promoted to explicit");
+            if (edge.type == "INFERRED_TARGET") {
+                ++ambiguous_members_count;
+                check(edge.properties.at("resolution_status") == "ambiguous", "Lost explicit ambiguity");
+            }
+        }
+        check(ambiguous_members_count == 4, "Missing ambiguous qualified/this candidates");
+        auto lambda_this = fixture("lambda.cpp", "abc",
+            "struct A { int h() { return 1; } int f() { auto l = [this]() { return this->h(); }; return 0; } };");
+        for (const auto& node : build_graph({lambda_this}).nodes)
+            if (node.type == "CallSite")
+                check(node.properties.at("target_resolution").at("reason") == "unsupported_this_context",
+                      "Guessed lambda receiver");
+        auto global_call = fixture("global.cpp", "abc",
+            "int h() { return 1; } namespace n { int h() { return 2; } int f() { return ::h(); } }");
+        int global_matches = 0;
+        for (const auto& edge : build_graph({global_call}).edges)
+            if (edge.type == "EXTRACTED_TARGET") {
+                ++global_matches;
+                check(edge.properties.at("matched_name") == "h", "Ignored absolute qualification");
+            }
+        check(global_matches == 1, "Missing absolute qualified target");
         auto first = fixture();
         auto second = fixture("other.cpp");
         auto third = fixture("src/main.cpp", "def");

@@ -34,6 +34,12 @@ requests. GitHub ingestion downloads source; it does not create a local checkout
 
 Extraction is syntactic. Call sites are recorded, but their targets are unresolved.
 Malformed code can produce partial models with diagnostics.
+Graph export then runs a separate target-resolution pass and writes graph v3:
+explicit qualified/`this` associations use `EXTRACTED_TARGET`, while
+`INFERRED_TARGET` edges retain inference evidence and ambiguity. The Python reader
+still accepts graph v1 and v2. Regenerate exports
+to obtain candidates; optional Neo4j indexing remains syntax-only for v2 code models.
+See [resolution coverage](../docs/call-resolution.md).
 
 See the [reference](../docs/ingestion.md) for supported inputs, output contracts,
 service configuration, and indexing commands, or the

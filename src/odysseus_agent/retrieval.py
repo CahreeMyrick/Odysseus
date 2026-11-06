@@ -44,7 +44,12 @@ def relations(requested: list[str], *, required: bool = False) -> set[str]:
         raise NotImplementedError(
             f"Unsupported relationships: {sorted(unknown)}; resolved CALLS is unavailable"
         )
-    return set(requested) if requested else set(RELATIONS)
+    # Inference is opt-in so existing structural traversals keep their meaning.
+    return (
+        set(requested)
+        if requested
+        else set(RELATIONS) - {"INFERRED_TARGET", "EXTRACTED_TARGET", "DECLARATION_OF", "INCLUDES"}
+    )
 
 
 def steps(store: GraphStore, node: str, allowed: set[str], direction: str):
